@@ -26,3 +26,5 @@ export function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Token inválido' });
   }
 }
+
+export default authMiddleware;
