@@ -23,6 +23,7 @@ router.post('/users', async (req, res) => {
       where: { email },
     });
 
+    // verifica se já existe usuário com esse email
     if (userExists) {
       return res.status(400).json({ error: 'Erro ao criar cadastro' });
     }

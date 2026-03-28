@@ -38,8 +38,9 @@ router.post('/login', async (req, res) => {
     const { password: _, ...userWithoutPassword } = userExists;
 
     // gera token
-    const token = jwt.sign({ userId: userExists.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ userId: userExists.id }, process.env.JWT_SECRET, { expiresIn: '100d' });
 
+    // retorna token e usuário sem senha
     return res.status(200).json({ ...userWithoutPassword, token });
   } catch (error) {
     console.error(error);
