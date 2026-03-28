@@ -11,6 +11,8 @@ app.get('/test', (req, res) => {
   res.send('Backend do Foody está rodando!');
 });
 
-app.listen(port, () => {
-  console.log(`Servidor rodando na porta ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`Servidor rodando na porta ${port}`);
+// });
+
+export default app;
