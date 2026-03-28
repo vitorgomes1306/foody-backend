@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "npx prisma generate && npx prisma migrate deploy && node server.js",
+    "start": "node wait-for-db.js && npx prisma migrate deploy && node server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
