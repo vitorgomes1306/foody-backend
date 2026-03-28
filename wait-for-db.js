@@ -1,3 +1,4 @@
+// Aguarda banco de dados estar pronto para o Railway iniciar o servidor
 import pkg from 'pg';
 const { Client } = pkg;
 
