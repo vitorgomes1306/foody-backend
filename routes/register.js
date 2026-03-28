@@ -1,7 +1,9 @@
 // Rota de registro de usuário
 import express from 'express';
 import bcrypt from 'bcrypt';
-import { prisma } from '../prisma/client';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 const router = express.Router();
 
