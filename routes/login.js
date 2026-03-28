@@ -1,46 +1,51 @@
-// Rota de acesso de usuário
-import express from 'express'; // para criar rotas
-import bcrypt from 'bcrypt'; // para comparação de senhas
-import { PrismaClient } from '@prisma/client'; // para acesso ao banco de dados
-import jwt from 'jsonwebtoken'; //importa o jwt para gerar tokens
+// Rota de login de usuário
+import express from 'express';
+import bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 
-// configuração do PrismaClient e do express.Router
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Rota de login de usuário com bcrypt e JWT
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // validação básica
     if (!email || !password) {
       return res.status(400).json({ error: 'Dados obrigatórios faltando' });
     }
 
-    // verifica se existe
-    const userExists = await prisma.user.findUnique({
+    // busca usuário no tenant correto
+    const user = await prisma.user.findFirst({
       where: { email },
     });
 
-    if (!userExists) {
+    if (!user) {
       return res.status(400).json({ error: 'Usuário não encontrado' });
     }
 
-    // compara senha
-    const passwordMatch = await bcrypt.compare(password, userExists.password);
+    // verifica se usuário está ativo
+    if (!user || user.active !== true) {
+      return res.status(400).json({ error: 'Usuário não está ativo' });
+    }
 
+    // compara senha
+    const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return res.status(400).json({ error: 'Senha incorreta' });
     }
 
-    // retorna usuário sem senha
-    const { password: _, ...userWithoutPassword } = userExists;
+    // remove senha da resposta
+    const { password: _, ...userWithoutPassword } = user;
 
-    // gera token
-    const token = jwt.sign({ userId: userExists.id }, process.env.JWT_SECRET, { expiresIn: '100d' });
+    // gera token JWT
+    const token = jwt.sign(
+      { userId: user.id, tenantId: user.tenantId },
+      process.env.JWT_SECRET,
+      { expiresIn: '100d' }
+    );
 
-    // retorna token e usuário sem senha
     return res.status(200).json({ ...userWithoutPassword, token });
   } catch (error) {
     console.error(error);

@@ -2,13 +2,12 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid'; 
 
 const prisma = new PrismaClient();
-
 const router = express.Router();
 
 // Registro de usuário com bcrypt
-
 router.post('/users', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -19,7 +18,7 @@ router.post('/users', async (req, res) => {
     }
 
     // verifica se já existe
-    const userExists = await prisma.user.findUnique({
+    const userExists = await prisma.user.findFirst({
       where: { email },
     });
 
@@ -31,12 +30,20 @@ router.post('/users', async (req, res) => {
     // hash da senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
+
+    // gera tenantId aleatório
+    
+    // gera tenantId aleatório
+    const tenantId = uuidv4();
+
+
     // cria usuário
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
+        tenantId,
       },
     });
 

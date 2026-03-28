@@ -19,6 +19,7 @@ export function authMiddleware(req, res, next) {
 
     // adiciona userId ao request
     req.userId = decoded.userId;
+    req.tenantId = decoded.tenantId;
 
     next();
   } catch (error) {
