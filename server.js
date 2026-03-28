@@ -1,18 +1,12 @@
-// Server do Foody
-
 import express from 'express';
+import serverless from 'serverless-http';
 
 const app = express();
 
-const port = process.env.PORT || 9800;
+app.use(express.json());
 
-// rota de teste
 app.get('/test', (req, res) => {
   res.send('Backend do Foody está rodando!');
 });
 
-// app.listen(port, () => {
-//   console.log(`Servidor rodando na porta ${port}`);
-// });
-
-export default app;
+export const handler = serverless(app);
