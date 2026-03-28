@@ -24,7 +24,7 @@ router.post('/users', async (req, res) => {
     });
 
     if (userExists) {
-      return res.status(400).json({ error: 'Usuário já existe' });
+      return res.status(400).json({ error: 'Erro ao criar cadastro' });
     }
 
     // hash da senha
