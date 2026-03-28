@@ -15,8 +15,6 @@ app.get('/test', (req, res) => {
 import registerRoutes from './routes/register.js';
 
 
-app.use('/register', registerRoutes);
-
 app.listen(port, '0.0.0.0', () => {
   console.log(`Servidor rodando na porta ${port}`);
 });

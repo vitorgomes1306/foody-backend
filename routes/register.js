@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Registro de usuário com bcrypt
 
-router.post('/register', async (req, res) => {
+router.post('/users', async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
