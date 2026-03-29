@@ -9,6 +9,7 @@ import registerRoutes from './routes/register.js';
 import loginRoutes from './routes/login.js';
 import profileRoutes from './routes/profile.js';
 import authMiddleware from './middlewares/auth.js';
+import tenantCreateRoutes from './routes/tenantCreate.js';
 //import pegarIP from './utils/ipAddress.js';
 
 // configuração de CORS
@@ -23,6 +24,7 @@ app.use(cors({
 app.use(express.json());
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
+app.use('/api', tenantCreateRoutes);
 app.use('/api', profileRoutes);
 
 // configuração da porta do servidor
@@ -34,7 +36,7 @@ const port = process.env.PORT || 3000;
 
 // rota de teste
 app.get('/test', async (req, res) => {
-  res.send(`😇 Backend do Foody está rodando`);
+  res.send(`🍔 Backend do Foody está rodando`);
 });
 
 // configuração do servidor

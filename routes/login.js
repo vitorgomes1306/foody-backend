@@ -46,8 +46,15 @@ router.post('/login', async (req, res) => {
             { expiresIn: '100d' }
         );
 
-        // ✅ LOGIN BEM-SUCEDIDO
-        console.log(`Usuário logado com sucesso: ${user.email} (ID: ${user.id}) token: ${token}`);
+        console.log({
+            message: '✅ Login realizado com sucesso',
+            id: uuidv4(),
+            userId: user.id,
+            email: user.email,
+            tenantId: user.tenantId,
+            timestamp: new Date().toISOString(),
+            active: user.active,
+        });
 
         return res.status(200).json({ ...userWithoutPassword, token });
     } catch (error) {

@@ -32,7 +32,20 @@ router.post('/users', async (req, res) => {
     });
 
     const { password: _, ...userWithoutPassword } = user;
-
+    
+    // Bloco de cadastro bem-sucedido
+    // ✅ CADASTRO BEM-SUCEDIDO
+    console.log({
+        message: '✅ Registro realizado com sucesso',
+        id: uuidv4(),
+        name,
+        email,
+        timestamp: new Date().toISOString(),
+    })
+    
+    // Aqui podemremos enviar emails de confirmação ou enviar para APIS externas como o Sendd.
+    //=========================================================================================
+    
     return res.status(201).json(userWithoutPassword);
 
   } catch (error) {
