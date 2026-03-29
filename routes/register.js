@@ -1,53 +1,36 @@
-// Rota de registro de usuário
 import express from 'express';
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid'; 
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Registro de usuário com bcrypt
 router.post('/users', async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // validação básica
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Dados obrigatórios faltando' });
     }
 
-    // verifica se já existe
     const userExists = await prisma.user.findFirst({
       where: { email },
     });
 
-    // verifica se já existe usuário com esse email
     if (userExists) {
       return res.status(400).json({ error: 'Erro ao criar cadastro' });
     }
 
-    // hash da senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
-
-    // gera tenantId aleatório
-    
-    // gera tenantId aleatório
-    const tenantId = uuidv4();
-
-
-    // cria usuário
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        tenantId,
       },
     });
 
-    // remove senha da resposta
     const { password: _, ...userWithoutPassword } = user;
 
     return res.status(201).json(userWithoutPassword);
@@ -59,6 +42,3 @@ router.post('/users', async (req, res) => {
 });
 
 export default router;
-
-
-

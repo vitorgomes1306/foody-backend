@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 
 const app = express();
 
@@ -8,6 +9,13 @@ import loginRoutes from './routes/login.js';
 import profileRoutes from './routes/profile.js';
 import authMiddleware from './middlewares/auth.js';
 //import pegarIP from './utils/ipAddress.js';
+
+// configuração de CORS
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 
 // configuração do servidor com express.json

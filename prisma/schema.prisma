@@ -37,12 +37,12 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(user)
-  tenantId  String   @db.Uuid
+  tenantId  String?  @db.Uuid
   active    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  tenant Tenant?  @relation(fields: [tenantId], references: [id]) // <- opcional também
   orders Order[]
 }
 
