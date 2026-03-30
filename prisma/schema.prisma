@@ -207,10 +207,11 @@ enum OrderType {
 }
 
 enum OrderStatus {
-  pending
-  confirmed
-  preparing
-  ready
-  delivered
-  cancelled
+  pending // pendente
+  confirmed // confirmado
+  preparing // preparando
+  ready // pronto
+  delivered // entregue
+  cancelled // cancelado  // entreg
+  returned //  devolvido
 }
