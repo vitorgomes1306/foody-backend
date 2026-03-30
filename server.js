@@ -30,10 +30,6 @@ app.use('/api', profileRoutes);
 // configuração da porta do servidor
 const port = process.env.PORT || 3000;
 
-// extrai a data e hora atual
-//const currentDate = new Date();
-//const currentDateTime = `${currentDate.toLocaleDateString()} ${currentDate.toLocaleTimeString()}`;
-
 // rota de teste
 app.get('/test', async (req, res) => {
   res.send(`🍔 Backend do Foody está rodando`);

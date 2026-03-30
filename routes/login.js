@@ -41,7 +41,7 @@ router.post('/login', async (req, res) => {
 
         // gera token JWT
         const token = jwt.sign(
-            { userId: user.id, tenantId: user.tenantId },
+            { userId: user.id },
             process.env.JWT_SECRET,
             { expiresIn: '100d' }
         );
@@ -51,7 +51,6 @@ router.post('/login', async (req, res) => {
             id: uuidv4(),
             userId: user.id,
             email: user.email,
-            tenantId: user.tenantId,
             timestamp: new Date().toISOString(),
             active: user.active,
         });

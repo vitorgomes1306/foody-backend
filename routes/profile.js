@@ -11,7 +11,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
     try {
         // userId veio do middleware authMiddleware, então é seguro usar ele
         const user = await prisma.user.findUnique({
-            where: { id: req.userId, tenantId: req.tenantId },
+            where: { id: req.userId },
         });
 
         if (!user) {

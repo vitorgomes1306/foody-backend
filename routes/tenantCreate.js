@@ -1,16 +1,132 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import multer from 'multer';
+import { createClient } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
+import authMiddleware from '../middlewares/auth.js';
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// rota para criar um tenant (food truck) com dados básicos
-router.post('/tenant', async (req, res) => {
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 60 * 1024 * 1024 },
+});
+
+function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRoleKey) return null;
+
+  return createClient(url, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+}
+
+function toSafePathSegment(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  const sanitized = normalized.replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return sanitized || 'tenant';
+}
+
+function extensionFromMimeType(mimeType) {
+  if (mimeType === 'image/jpeg') return 'jpg';
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/webp') return 'webp';
+  if (mimeType === 'video/mp4') return 'mp4';
+  if (mimeType === 'video/webm') return 'webm';
+  if (mimeType === 'video/quicktime') return 'mov';
+  return null;
+}
+
+async function uploadFileToSupabase({ supabase, bucket, path, file, upsert }) {
+  const { error } = await supabase.storage.from(bucket).upload(path, file.buffer, {
+    contentType: file.mimetype,
+    upsert: Boolean(upsert),
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Falha ao enviar arquivo para o Supabase Storage');
+  }
+
+  const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(path);
+  const publicUrl = publicUrlResult?.data?.publicUrl;
+  if (!publicUrl) {
+    throw new Error('Falha ao gerar URL pública do arquivo enviado');
+  }
+
+  return { publicUrl, path };
+}
+
+router.get('/tenants', authMiddleware, async (req, res) => {
   try {
-    const { name, slug, logoUrl, phone, userId } = req.body;
+    const tenants = await prisma.tenant.findMany({
+      where: { ownerId: req.userId },
+      include: { media: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.status(200).json(tenants);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/tenant/me', authMiddleware, async (req, res) => {
+  try {
+    const tenant = await prisma.tenant.findFirst({
+      where: { ownerId: req.userId },
+      include: { media: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant não encontrado' });
+    }
+
+    return res.status(200).json(tenant);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/tenant/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { id, ownerId: req.userId },
+      include: { media: true },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant não encontrado' });
+    }
+
+    return res.status(200).json(tenant);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// rota para criar um tenant (food truck) com dados básicos
+router.post(
+  '/tenant',
+  upload.fields([
+    { name: 'logo', maxCount: 1 },
+    { name: 'media', maxCount: 20 },
+  ]),
+  async (req, res) => {
+  try {
+    const { name, slug, phone, userId, logoUrl } = req.body;
+    const parsedUserId = Number(userId);
+    const normalizedLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
 
     // validação básica
-    if (!name || !slug || !userId) {
+    if (!name || !slug || !Number.isFinite(parsedUserId)) {
       return res.status(400).json({ error: 'Dados obrigatórios faltando' });
     }
 
@@ -25,27 +141,111 @@ router.post('/tenant', async (req, res) => {
 
     // verifica se o usuário existe
     const userExists = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: parsedUserId },
     });
 
     if (!userExists) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    const tenant = await prisma.tenant.create({
+    const supabase = getSupabaseClient();
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'tenants';
+    const hasAnyFiles = Boolean(req.files?.logo?.length || req.files?.media?.length);
+    if (hasAnyFiles && !supabase) {
+      return res.status(500).json({ error: 'Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+    }
+
+    const createdTenant = await prisma.tenant.create({
       data: {
         name,
         slug,
-        logoUrl,
+        logoUrl: typeof normalizedLogoUrl === 'string' ? (normalizedLogoUrl ? normalizedLogoUrl : null) : undefined,
         phone,
+        ownerId: parsedUserId,
         active: true,
-        users: {
-          connect: { id: userId },
-        },
       },
     });
 
-    return res.status(201).json(tenant);
+    const safeSlug = toSafePathSegment(slug);
+    const uploadedPaths = [];
+
+    try {
+      const logoFile = req.files?.logo?.[0];
+      if (logoFile) {
+        if (!logoFile.mimetype?.startsWith('image/')) {
+          return res.status(400).json({ error: 'O logo deve ser uma imagem' });
+        }
+
+        const ext = extensionFromMimeType(logoFile.mimetype) || 'bin';
+        const logoPath = `${safeSlug}/${createdTenant.id}/logo.${ext}`;
+        const uploadedLogo = await uploadFileToSupabase({
+          supabase,
+          bucket,
+          path: logoPath,
+          file: logoFile,
+          upsert: true,
+        });
+        uploadedPaths.push(uploadedLogo.path);
+
+        await prisma.tenant.update({
+          where: { id: createdTenant.id },
+          data: { logoUrl: uploadedLogo.publicUrl },
+        });
+      }
+
+      const mediaFiles = req.files?.media ?? [];
+      if (mediaFiles.length) {
+        const mediaToCreate = [];
+
+        for (const file of mediaFiles) {
+          const isImage = file.mimetype?.startsWith('image/');
+          const isVideo = file.mimetype?.startsWith('video/');
+          if (!isImage && !isVideo) {
+            return res.status(400).json({ error: 'Envie apenas imagens ou vídeos no campo media' });
+          }
+
+          const ext = extensionFromMimeType(file.mimetype) || 'bin';
+          const mediaPath = `${safeSlug}/${createdTenant.id}/media/${uuidv4()}.${ext}`;
+          const uploadedMedia = await uploadFileToSupabase({
+            supabase,
+            bucket,
+            path: mediaPath,
+            file,
+            upsert: false,
+          });
+          uploadedPaths.push(uploadedMedia.path);
+
+          mediaToCreate.push({
+            tenantId: createdTenant.id,
+            kind: isImage ? 'image' : 'video',
+            url: uploadedMedia.publicUrl,
+            mimeType: file.mimetype,
+          });
+        }
+
+        if (mediaToCreate.length) {
+          await prisma.tenantMedia.createMany({ data: mediaToCreate });
+        }
+      }
+
+      const tenantWithMedia = await prisma.tenant.findUnique({
+        where: { id: createdTenant.id },
+        include: { media: true },
+      });
+
+      return res.status(201).json(tenantWithMedia);
+    } catch (uploadError) {
+      if (supabase && uploadedPaths.length) {
+        try {
+          await supabase.storage.from(bucket).remove(uploadedPaths);
+        } catch {
+          void 0;
+        }
+      }
+
+      await prisma.tenant.delete({ where: { id: createdTenant.id } });
+      throw uploadError;
+    }
 
   } catch (error) {
     console.error(error);
@@ -54,13 +254,23 @@ router.post('/tenant', async (req, res) => {
     }
     return res.status(500).json({ error: 'Erro interno do servidor' });
   }
-});
+  }
+);
 
 // rota para PUT atualizar dados básicos de um tenant (food truck)
-router.put('/tenant/:id', async (req, res) => {
+router.put(
+  '/tenant/:id',
+  authMiddleware,
+  upload.fields([
+    { name: 'logo', maxCount: 1 },
+    { name: 'media', maxCount: 20 },
+  ]),
+  async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, logoUrl, phone, active } = req.body;
+    const { name, slug, phone, active, logoUrl } = req.body;
+    const parsedActive = active === 'true' ? true : active === 'false' ? false : undefined;
+    const normalizedLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
 
     // validação básica
     if (!name || !slug) {
@@ -76,6 +286,10 @@ router.put('/tenant/:id', async (req, res) => {
       return res.status(404).json({ error: 'Tenant não encontrado' });
     }
 
+    if (tenantExists.ownerId !== req.userId) {
+      return res.status(403).json({ error: 'Acesso negado ao tenant' });
+    }
+
     // verifica se o slug já está em uso por outro tenant
     if (slug !== tenantExists.slug) {
       const slugExists = await prisma.tenant.findUnique({
@@ -86,18 +300,103 @@ router.put('/tenant/:id', async (req, res) => {
       }
     }
 
-    const tenant = await prisma.tenant.update({
+    const supabase = getSupabaseClient();
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'tenants';
+    const hasAnyFiles = Boolean(req.files?.logo?.length || req.files?.media?.length);
+    if (hasAnyFiles && !supabase) {
+      return res.status(500).json({ error: 'Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+    }
+
+    const safeSlug = toSafePathSegment(slug);
+    const uploadedPaths = [];
+
+    const updatedTenant = await prisma.tenant.update({
       where: { id },
       data: {
         name,
         slug,
-        logoUrl,
+        logoUrl: typeof normalizedLogoUrl === 'string' ? (normalizedLogoUrl ? normalizedLogoUrl : null) : undefined,
         phone,
-        active,
+        active: typeof parsedActive === 'boolean' ? parsedActive : tenantExists.active,
       },
     });
 
-    return res.status(200).json(tenant);
+    try {
+      const logoFile = req.files?.logo?.[0];
+      if (logoFile) {
+        if (!logoFile.mimetype?.startsWith('image/')) {
+          return res.status(400).json({ error: 'O logo deve ser uma imagem' });
+        }
+
+        const ext = extensionFromMimeType(logoFile.mimetype) || 'bin';
+        const logoPath = `${safeSlug}/${updatedTenant.id}/logo.${ext}`;
+        const uploadedLogo = await uploadFileToSupabase({
+          supabase,
+          bucket,
+          path: logoPath,
+          file: logoFile,
+          upsert: true,
+        });
+        uploadedPaths.push(uploadedLogo.path);
+
+        await prisma.tenant.update({
+          where: { id: updatedTenant.id },
+          data: { logoUrl: uploadedLogo.publicUrl },
+        });
+      }
+
+      const mediaFiles = req.files?.media ?? [];
+      if (mediaFiles.length) {
+        const mediaToCreate = [];
+
+        for (const file of mediaFiles) {
+          const isImage = file.mimetype?.startsWith('image/');
+          const isVideo = file.mimetype?.startsWith('video/');
+          if (!isImage && !isVideo) {
+            return res.status(400).json({ error: 'Envie apenas imagens ou vídeos no campo media' });
+          }
+
+          const ext = extensionFromMimeType(file.mimetype) || 'bin';
+          const mediaPath = `${safeSlug}/${updatedTenant.id}/media/${uuidv4()}.${ext}`;
+          const uploadedMedia = await uploadFileToSupabase({
+            supabase,
+            bucket,
+            path: mediaPath,
+            file,
+            upsert: false,
+          });
+          uploadedPaths.push(uploadedMedia.path);
+
+          mediaToCreate.push({
+            tenantId: updatedTenant.id,
+            kind: isImage ? 'image' : 'video',
+            url: uploadedMedia.publicUrl,
+            mimeType: file.mimetype,
+          });
+        }
+
+        if (mediaToCreate.length) {
+          await prisma.tenantMedia.createMany({ data: mediaToCreate });
+        }
+      }
+
+      const tenantWithMedia = await prisma.tenant.findUnique({
+        where: { id: updatedTenant.id },
+        include: { media: true },
+      });
+
+      return res.status(200).json(tenantWithMedia);
+    } catch (uploadError) {
+      if (supabase && uploadedPaths.length) {
+        try {
+          await supabase.storage.from(bucket).remove(uploadedPaths);
+        } catch {
+          void 0;
+        }
+      }
+
+      throw uploadError;
+    }
 
   } catch (error) {
     console.error(error);
@@ -106,11 +405,12 @@ router.put('/tenant/:id', async (req, res) => {
     }
     return res.status(500).json({ error: 'Erro interno do servidor' });
   }
-});
+  }
+);
 
 // rota para deletar um tenant (food truck)
 
-router.delete('/tenant/:id', async (req, res) => {
+router.delete('/tenant/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -120,6 +420,10 @@ router.delete('/tenant/:id', async (req, res) => {
     });
     if (!tenantExists) {
       return res.status(404).json({ error: 'Tenant não encontrado' });
+    }
+
+    if (tenantExists.ownerId !== req.userId) {
+      return res.status(403).json({ error: 'Acesso negado ao tenant' });
     }
     // deleta o tenant
     await prisma.tenant.delete({
