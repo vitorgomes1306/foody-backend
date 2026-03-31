@@ -22,8 +22,8 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-// Relacionamentos
-  owner     User       @relation(fields: [ownerId], references: [id])
+  // Relacionamentos
+  owner      User          @relation(fields: [ownerId], references: [id])
   media      TenantMedia[]
   categories Category[]
   products   Product[]
@@ -80,6 +80,7 @@ model Category {
 // ─────────────────────────────────────────
 model Product {
   id          Int      @id @default(autoincrement())
+  seq         Int
   name        String
   description String?
   price       Decimal  @db.Decimal(10, 2)
@@ -94,6 +95,8 @@ model Product {
   category     Category      @relation(fields: [categoryId], references: [id])
   orderItems   OrderItem[]
   optionGroups OptionGroup[]
+
+  @@unique([tenantId, seq])
 }
 
 // ─────────────────────────────────────────
@@ -199,6 +202,7 @@ model OrderItemOption {
 enum Role {
   user
   admin
+  tenant
 }
 
 enum OrderType {

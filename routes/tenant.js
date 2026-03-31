@@ -58,6 +58,44 @@ async function uploadFileToSupabase({ supabase, bucket, path, file, upsert }) {
   return { publicUrl, path };
 }
 
+// rota pública para obter tenant pelo slug (para cardápio / vitrine)
+router.get('/public/tenant/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const normalizedSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : '';
+    if (!normalizedSlug) {
+      return res.status(400).json({ error: 'Slug inválido' });
+    }
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: normalizedSlug, active: true },
+      include: {
+        media: true,
+        categories: {
+          where: { active: true },
+          include: {
+            products: {
+              where: { active: true },
+              orderBy: [{ seq: 'asc' }, { id: 'asc' }],
+            },
+          },
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant não encontrado' });
+    }
+
+    return res.status(200).json(tenant);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// rota para obter todos os tenants (food trucks) do usuário autenticado
 router.get('/tenants', authMiddleware, async (req, res) => {
   try {
     const tenants = await prisma.tenant.findMany({
@@ -73,6 +111,7 @@ router.get('/tenants', authMiddleware, async (req, res) => {
   }
 });
 
+// rota para obter o tenant (food truck) do usuário autenticado
 router.get('/tenant/me', authMiddleware, async (req, res) => {
   try {
     const tenant = await prisma.tenant.findFirst({
@@ -92,6 +131,7 @@ router.get('/tenant/me', authMiddleware, async (req, res) => {
   }
 });
 
+// rota para obter um tenant (food truck) pelo ID
 router.get('/tenant/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,19 +164,38 @@ router.post(
     const { name, slug, phone, userId, logoUrl } = req.body;
     const parsedUserId = Number(userId);
     const normalizedLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
+    const rawSlug = typeof slug === 'string' ? slug.trim() : '';
+    const baseSlug = toSafePathSegment(rawSlug || name);
+    const slugWasProvided = Boolean(rawSlug);
 
     // validação básica
-    if (!name || !slug || !Number.isFinite(parsedUserId)) {
+    if (!name || !Number.isFinite(parsedUserId)) {
       return res.status(400).json({ error: 'Dados obrigatórios faltando' });
     }
 
-    // verifica se já existe tenant com esse slug
-    const slugExists = await prisma.tenant.findUnique({
-      where: { slug },
-    });
+    let resolvedSlug = baseSlug;
+    if (slugWasProvided) {
+      const slugExists = await prisma.tenant.findUnique({
+        where: { slug: resolvedSlug },
+      });
+      if (slugExists) {
+        return res.status(400).json({ error: 'Já existe um food truck com esse slug' });
+      }
+    } else {
+      for (let i = 0; i < 50; i += 1) {
+        const slugExists = await prisma.tenant.findUnique({
+          where: { slug: resolvedSlug },
+        });
+        if (!slugExists) break;
+        resolvedSlug = `${baseSlug}-${i + 2}`;
+      }
 
-    if (slugExists) {
-      return res.status(400).json({ error: 'Já existe um food truck com esse slug' });
+      const slugExists = await prisma.tenant.findUnique({
+        where: { slug: resolvedSlug },
+      });
+      if (slugExists) {
+        return res.status(500).json({ error: 'Falha ao gerar slug único' });
+      }
     }
 
     // verifica se o usuário existe
@@ -158,7 +217,7 @@ router.post(
     const createdTenant = await prisma.tenant.create({
       data: {
         name,
-        slug,
+        slug: resolvedSlug,
         logoUrl: typeof normalizedLogoUrl === 'string' ? (normalizedLogoUrl ? normalizedLogoUrl : null) : undefined,
         phone,
         ownerId: parsedUserId,
@@ -166,7 +225,7 @@ router.post(
       },
     });
 
-    const safeSlug = toSafePathSegment(slug);
+    const safeSlug = toSafePathSegment(resolvedSlug);
     const uploadedPaths = [];
 
     try {

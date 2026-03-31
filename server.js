@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
+import slugify from 'slugify';
 
 const app = express();
 
@@ -9,8 +10,11 @@ import registerRoutes from './routes/register.js';
 import loginRoutes from './routes/login.js';
 import profileRoutes from './routes/profile.js';
 import authMiddleware from './middlewares/auth.js';
-import tenantCreateRoutes from './routes/tenantCreate.js';
-//import pegarIP from './utils/ipAddress.js';
+import tenantRoutes from './routes/tenant.js';
+import productRoutes from './routes/product.js';
+import categoryRoutes from './routes/category.js';
+
+
 
 // configuração de CORS
 app.use(cors({
@@ -24,8 +28,11 @@ app.use(cors({
 app.use(express.json());
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
-app.use('/api', tenantCreateRoutes);
+app.use('/api', tenantRoutes);
 app.use('/api', profileRoutes);
+app.use('/api', productRoutes);
+app.use('/api', categoryRoutes);
+
 
 // configuração da porta do servidor
 const port = process.env.PORT || 3000;
