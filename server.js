@@ -13,6 +13,8 @@ import authMiddleware from './middlewares/auth.js';
 import tenantRoutes from './routes/tenant.js';
 import productRoutes from './routes/product.js';
 import categoryRoutes from './routes/category.js';
+import orderRoutes from './routes/order.js';
+import optionsRoutes from './routes/options.js';
 
 
 
@@ -32,6 +34,8 @@ app.use('/api', tenantRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', productRoutes);
 app.use('/api', categoryRoutes);
+app.use('/api', orderRoutes);
+app.use('/api', optionsRoutes);
 
 
 // configuração da porta do servidor

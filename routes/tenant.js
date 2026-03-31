@@ -76,6 +76,14 @@ router.get('/public/tenant/:slug', async (req, res) => {
           include: {
             products: {
               where: { active: true },
+              include: {
+                optionGroups: {
+                  include: {
+                    options: true,
+                  },
+                  orderBy: [{ id: 'asc' }],
+                },
+              },
               orderBy: [{ seq: 'asc' }, { id: 'asc' }],
             },
           },
