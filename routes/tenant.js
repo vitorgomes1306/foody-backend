@@ -58,6 +58,25 @@ async function uploadFileToSupabase({ supabase, bucket, path, file, upsert }) {
   return { publicUrl, path };
 }
 
+function isTimeString(value) {
+  if (typeof value !== 'string') return false;
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim());
+}
+
+function normalizeTimeString(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return isTimeString(trimmed) ? trimmed : null;
+}
+
+async function assertTenantOwner({ tenantId, userId }) {
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId, ownerId: userId },
+    select: { id: true },
+  });
+  return Boolean(tenant);
+}
+
 // rota pública para obter tenant pelo slug (para cardápio / vitrine)
 router.get('/public/tenant/:slug', async (req, res) => {
   try {
@@ -71,6 +90,8 @@ router.get('/public/tenant/:slug', async (req, res) => {
       where: { slug: normalizedSlug, active: true },
       include: {
         media: true,
+        openingHours: { orderBy: [{ weekday: 'asc' }] },
+        paymentMethods: { where: { enabled: true }, orderBy: [{ type: 'asc' }] },
         categories: {
           where: { active: true },
           include: {
@@ -97,6 +118,145 @@ router.get('/public/tenant/:slug', async (req, res) => {
     }
 
     return res.status(200).json(tenant);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/tenant/:id/opening-hours', authMiddleware, async (req, res) => {
+  try {
+    const tenantId = req.params.id;
+    const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
+    if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+
+    const openingHours = await prisma.tenantOpeningHour.findMany({
+      where: { tenantId },
+      orderBy: [{ weekday: 'asc' }],
+    });
+
+    return res.status(200).json(openingHours);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.put('/tenant/:id/opening-hours', authMiddleware, async (req, res) => {
+  try {
+    const tenantId = req.params.id;
+    const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
+    if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+
+    const hours = Array.isArray(req.body?.hours) ? req.body.hours : Array.isArray(req.body) ? req.body : null;
+    if (!hours) return res.status(400).json({ error: 'Body inválido: envie um array ou { hours: [...] }' });
+
+    const allowedWeekdays = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+    const normalized = [];
+    const seen = new Set();
+
+    for (const item of hours) {
+      const weekday = typeof item?.weekday === 'string' ? item.weekday.trim().toLowerCase() : '';
+      if (!allowedWeekdays.has(weekday)) return res.status(400).json({ error: 'weekday inválido' });
+      if (seen.has(weekday)) return res.status(400).json({ error: `weekday duplicado: ${weekday}` });
+      seen.add(weekday);
+
+      const closed = typeof item?.closed === 'boolean' ? item.closed : false;
+      const openTime = normalizeTimeString(item?.openTime);
+      const closeTime = normalizeTimeString(item?.closeTime);
+
+      if (!closed) {
+        if (!openTime || !closeTime) return res.status(400).json({ error: 'openTime/closeTime obrigatórios quando closed=false' });
+        if (openTime >= closeTime) return res.status(400).json({ error: 'openTime deve ser menor que closeTime' });
+      }
+
+      normalized.push({
+        tenantId,
+        weekday,
+        closed,
+        openTime: closed ? null : openTime,
+        closeTime: closed ? null : closeTime,
+      });
+    }
+
+    const saved = await prisma.$transaction(async (tx) => {
+      await tx.tenantOpeningHour.deleteMany({ where: { tenantId } });
+      if (normalized.length) {
+        await tx.tenantOpeningHour.createMany({ data: normalized });
+      }
+      return await tx.tenantOpeningHour.findMany({
+        where: { tenantId },
+        orderBy: [{ weekday: 'asc' }],
+      });
+    });
+
+    return res.status(200).json(saved);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/tenant/:id/payment-methods', authMiddleware, async (req, res) => {
+  try {
+    const tenantId = req.params.id;
+    const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
+    if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+
+    const paymentMethods = await prisma.tenantPaymentMethod.findMany({
+      where: { tenantId },
+      orderBy: [{ type: 'asc' }],
+    });
+
+    return res.status(200).json(paymentMethods);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.put('/tenant/:id/payment-methods/:type', authMiddleware, async (req, res) => {
+  try {
+    const tenantId = req.params.id;
+    const type = typeof req.params.type === 'string' ? req.params.type.trim().toLowerCase() : '';
+    const allowedTypes = new Set(['cash', 'pix', 'debit_card', 'credit_card', 'voucher', 'other']);
+    if (!allowedTypes.has(type)) return res.status(400).json({ error: 'type inválido' });
+
+    const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
+    if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+
+    const enabled = typeof req.body?.enabled === 'boolean' ? req.body.enabled : true;
+    const label = typeof req.body?.label === 'string' ? req.body.label.trim() : null;
+    const details = typeof req.body?.details === 'object' && req.body.details !== null ? req.body.details : null;
+
+    const paymentMethod = await prisma.tenantPaymentMethod.upsert({
+      where: { tenantId_type: { tenantId, type } },
+      update: { enabled, label, details },
+      create: { tenantId, type, enabled, label, details },
+    });
+
+    return res.status(200).json(paymentMethod);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.delete('/tenant/:id/payment-methods/:type', authMiddleware, async (req, res) => {
+  try {
+    const tenantId = req.params.id;
+    const type = typeof req.params.type === 'string' ? req.params.type.trim().toLowerCase() : '';
+    const allowedTypes = new Set(['cash', 'pix', 'debit_card', 'credit_card', 'voucher', 'other']);
+    if (!allowedTypes.has(type)) return res.status(400).json({ error: 'type inválido' });
+
+    const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
+    if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+
+    await prisma.tenantPaymentMethod.delete({
+      where: { tenantId_type: { tenantId, type } },
+    });
+
+    return res.status(204).json({});
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor' });

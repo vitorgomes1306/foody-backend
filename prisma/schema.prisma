@@ -21,14 +21,78 @@ model Tenant {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  zipCode   String?
+  street    String?
+  number    String?
+  complement  String?
+  district  String?
+  city      String?
+  state     String?
+  country   String?
+  email     String?
+  website   String?
+  instagram String?
+  facebook  String?
+  twitter   String?
+  youtube   String?
+  geoLocation String?
 
   // Relacionamentos
   owner      User          @relation(fields: [ownerId], references: [id])
   media      TenantMedia[]
+  openingHours TenantOpeningHour[]
+  paymentMethods TenantPaymentMethod[]
+  deliveryDrivers DeliveryDriver[]
   categories Category[]
   products   Product[]
   orders     Order[]
   tables     Table[]
+}
+
+model TenantOpeningHour {
+  id        Int      @id @default(autoincrement())
+  tenantId  String   @db.Uuid
+  weekday   Weekday
+  closed    Boolean  @default(false)
+  openTime  String?
+  closeTime String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, weekday])
+  @@index([tenantId])
+}
+
+model TenantPaymentMethod {
+  id        Int      @id @default(autoincrement())
+  tenantId  String   @db.Uuid
+  type      PaymentMethodType
+  enabled   Boolean  @default(true)
+  label     String?
+  details   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type])
+  @@index([tenantId])
+}
+
+model DeliveryDriver {
+  id        Int      @id @default(autoincrement())
+  tenantId  String   @db.Uuid
+  name      String
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model TenantMedia {
@@ -218,4 +282,23 @@ enum OrderStatus {
   delivered // entregue
   cancelled // cancelado  // entreg
   returned //  devolvido
+}
+
+enum Weekday {
+  mon
+  tue
+  wed
+  thu
+  fri
+  sat
+  sun
+}
+
+enum PaymentMethodType {
+  cash
+  pix
+  debit_card
+  credit_card
+  voucher
+  other
 }
