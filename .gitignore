@@ -2,3 +2,6 @@ node_modules
 .env
 /generated/prisma
 frontend
+chefito_frontend
+.DS_Store
+frontend_projeto_curso

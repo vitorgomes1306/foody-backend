@@ -46,7 +46,7 @@ function centsToDecimalString(cents) {
 }
 
 function parseOrderType(value) {
-  if (value === "local" || value === "delivery") return value
+  if (value === "local" || value === "delivery" || value === "pickup") return value
   return null
 }
 
@@ -56,6 +56,7 @@ function parseOrderStatus(value) {
     value === "confirmed" ||
     value === "preparing" ||
     value === "ready" ||
+    value === "out_for_delivery" ||
     value === "delivered" ||
     value === "cancelled" ||
     value === "returned"
@@ -63,6 +64,110 @@ function parseOrderStatus(value) {
     return value
   }
   return null
+}
+
+function parsePriceToDecimalString(value) {
+  const raw = String(value ?? "").trim()
+  if (!raw) return null
+  const normalized = raw.replace(",", ".")
+  if (!/^-?\d+(\.\d{1,2})?$/.test(normalized)) return null
+  const parsed = Number.parseFloat(normalized)
+  if (!Number.isFinite(parsed)) return null
+  return parsed.toFixed(2)
+}
+
+function isMissingOrderColumn(err, columnName) {
+  if (!err || typeof err !== "object") return false
+  const code = "code" in err ? err.code : null
+  const msg = "message" in err && typeof err.message === "string" ? err.message : ""
+  const metaColumn =
+    "meta" in err && err.meta && typeof err.meta === "object" && "column" in err.meta && typeof err.meta.column === "string"
+      ? err.meta.column
+      : ""
+
+  const needle = String(columnName || "").trim()
+  if (!needle) return false
+
+  if (code === "P2022" && (metaColumn === `Order.${needle}` || metaColumn.includes(needle) || msg.includes(needle))) return true
+  if (msg.includes(needle) && msg.toLowerCase().includes("does not exist")) return true
+  return false
+}
+
+function isMissingAnyOrderColumns(err) {
+  return (
+    isMissingOrderColumn(err, "statusChangedAt") ||
+    isMissingOrderColumn(err, "deliveryFee") ||
+    isMissingOrderColumn(err, "deliveryManId")
+  )
+}
+
+function orderSelect({ includeStatusChangedAt, includeDelivery }) {
+  return {
+    id: true,
+    tenantId: true,
+    userId: true,
+    tableId: true,
+    type: true,
+    status: true,
+    ...(includeStatusChangedAt ? { statusChangedAt: true } : {}),
+    total: true,
+    ...(includeDelivery
+      ? {
+          deliveryFee: true,
+          deliveryManId: true,
+          deliveryMan: true,
+        }
+      : {}),
+    notes: true,
+    customerName: true,
+    customerPhone: true,
+    customerAddress: true,
+    createdAt: true,
+    updatedAt: true,
+    table: true,
+    items: {
+      select: {
+        id: true,
+        orderId: true,
+        productId: true,
+        quantity: true,
+        unitPrice: true,
+        notes: true,
+        product: true,
+        options: {
+          select: {
+            id: true,
+            orderItemId: true,
+            optionId: true,
+            quantity: true,
+            priceAdded: true,
+            option: true,
+          },
+        },
+      },
+    },
+  }
+}
+
+function calculateItemsTotalCentsFromOrder(order) {
+  const items = Array.isArray(order?.items) ? order.items : []
+  let totalCents = 0n
+  for (const it of items) {
+    const qty = typeof it?.quantity === "number" ? it.quantity : 0
+    if (!qty || qty < 1) continue
+    const unitCents = decimalStringToCents(it?.unitPrice?.toString?.() ?? String(it?.unitPrice ?? ""))
+    if (unitCents === null) continue
+    const opts = Array.isArray(it?.options) ? it.options : []
+    let optsCentsPerUnit = 0n
+    for (const opt of opts) {
+      const optQty = typeof opt?.quantity === "number" ? opt.quantity : 1
+      const addCents = decimalStringToCents(opt?.priceAdded?.toString?.() ?? String(opt?.priceAdded ?? "0"))
+      if (addCents === null) continue
+      optsCentsPerUnit += addCents * BigInt(optQty || 1)
+    }
+    totalCents += (unitCents + optsCentsPerUnit) * BigInt(qty)
+  }
+  return totalCents
 }
 
 async function resolveTenantIdFromSlug(slug) {
@@ -107,7 +212,7 @@ async function buildOrderCreateData({ tenantId, body }) {
     }
   }
 
-  const [products, options] = await Promise.all([
+  const [products, options, tenant] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId, id: { in: productIds }, active: true },
       select: { id: true, price: true },
@@ -122,6 +227,9 @@ async function buildOrderCreateData({ tenantId, body }) {
           },
         })
       : Promise.resolve([]),
+    prisma.tenant
+      .findFirst({ where: { id: tenantId }, select: { id: true, deliveryFee: true } })
+      .catch(() => null),
   ])
 
   const productById = new Map(products.map((p) => [p.id, p]))
@@ -179,13 +287,16 @@ async function buildOrderCreateData({ tenantId, body }) {
     })
   }
 
-  const total = centsToDecimalString(totalCents)
+  const deliveryFeeCents = type === "delivery" ? decimalStringToCents(tenant?.deliveryFee?.toString?.() ?? String(tenant?.deliveryFee ?? "0")) : 0n
+  const deliveryFee = centsToDecimalString(deliveryFeeCents)
+  const total = centsToDecimalString(totalCents + deliveryFeeCents)
 
   return {
     ok: true,
     data: {
       type,
       total,
+      deliveryFee,
       notes: notes || null,
       customerName: customerName || null,
       customerPhone: customerPhone || null,
@@ -218,23 +329,32 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
             ).id
           : null
 
-      return await tx.order.create({
+      const createArgs = {
         data: {
           tenantId,
           tableId,
           type: built.data.type,
           total: built.data.total,
+          deliveryFee: built.data.deliveryFee,
           notes: built.data.notes,
           customerName: built.data.customerName,
           customerPhone: built.data.customerPhone,
           customerAddress: built.data.customerAddress,
           items: { create: built.data.itemsToCreate },
         },
-        include: {
-          items: { include: { options: true, product: true } },
-          table: true,
-        },
-      })
+      }
+
+      try {
+        return await tx.order.create({ ...createArgs, select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }) })
+      } catch (err) {
+        if (!isMissingAnyOrderColumns(err)) throw err
+        const fallbackCreateArgs = {
+          ...createArgs,
+          data: { ...createArgs.data },
+        }
+        delete fallbackCreateArgs.data.deliveryFee
+        return await tx.order.create({ ...fallbackCreateArgs, select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }) })
+      }
     })
 
     return res.status(201).json(order)
@@ -256,14 +376,21 @@ router.get("/tenant/:tenantId/orders", authMiddleware, async (req, res) => {
     const type = typeof req.query.type === "string" ? parseOrderType(req.query.type) : null
     if (typeof req.query.type === "string" && !type) return res.status(400).json({ error: "type inválido" })
 
-    const orders = await prisma.order.findMany({
-      where: { tenantId, ...(status ? { status } : {}), ...(type ? { type } : {}) },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      include: {
-        table: true,
-        items: { include: { product: true, options: { include: { option: true } } } },
-      },
-    })
+    let orders
+    try {
+      orders = await prisma.order.findMany({
+        where: { tenantId, ...(status ? { status } : {}), ...(type ? { type } : {}) },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }),
+      })
+    } catch (err) {
+      if (!isMissingAnyOrderColumns(err)) throw err
+      orders = await prisma.order.findMany({
+        where: { tenantId, ...(status ? { status } : {}), ...(type ? { type } : {}) },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }),
+      })
+    }
 
     return res.status(200).json(orders)
   } catch (error) {
@@ -281,13 +408,19 @@ router.get("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) => {
     const allowed = await assertTenantOwner({ tenantId, userId: req.userId })
     if (!allowed) return res.status(403).json({ error: "Acesso negado ao tenant" })
 
-    const order = await prisma.order.findFirst({
-      where: { tenantId, id },
-      include: {
-        table: true,
-        items: { include: { product: true, options: { include: { option: true } } } },
-      },
-    })
+    let order
+    try {
+      order = await prisma.order.findFirst({
+        where: { tenantId, id },
+        select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }),
+      })
+    } catch (err) {
+      if (!isMissingAnyOrderColumns(err)) throw err
+      order = await prisma.order.findFirst({
+        where: { tenantId, id },
+        select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }),
+      })
+    }
 
     if (!order) return res.status(404).json({ error: "Pedido não encontrado" })
     return res.status(200).json(order)
@@ -319,23 +452,32 @@ router.post("/tenant/:tenantId/orders", authMiddleware, async (req, res) => {
             ).id
           : null
 
-      return await tx.order.create({
+      const createArgs = {
         data: {
           tenantId,
           tableId,
           type: built.data.type,
           total: built.data.total,
+          deliveryFee: built.data.deliveryFee,
           notes: built.data.notes,
           customerName: built.data.customerName,
           customerPhone: built.data.customerPhone,
           customerAddress: built.data.customerAddress,
           items: { create: built.data.itemsToCreate },
         },
-        include: {
-          items: { include: { options: true, product: true } },
-          table: true,
-        },
-      })
+      }
+
+      try {
+        return await tx.order.create({ ...createArgs, select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }) })
+      } catch (err) {
+        if (!isMissingAnyOrderColumns(err)) throw err
+        const fallbackCreateArgs = {
+          ...createArgs,
+          data: { ...createArgs.data },
+        }
+        delete fallbackCreateArgs.data.deliveryFee
+        return await tx.order.create({ ...fallbackCreateArgs, select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }) })
+      }
     })
 
     return res.status(201).json(order)
@@ -354,7 +496,7 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
     const allowed = await assertTenantOwner({ tenantId, userId: req.userId })
     if (!allowed) return res.status(403).json({ error: "Acesso negado ao tenant" })
 
-    const existing = await prisma.order.findFirst({ where: { tenantId, id } })
+    const existing = await prisma.order.findFirst({ where: { tenantId, id }, select: { id: true, status: true, type: true } })
     if (!existing) return res.status(404).json({ error: "Pedido não encontrado" })
 
     const data = {}
@@ -362,20 +504,61 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
     if (typeof req.body?.customerName === "string") data.customerName = req.body.customerName.trim() || null
     if (typeof req.body?.customerPhone === "string") data.customerPhone = req.body.customerPhone.trim() || null
     if (typeof req.body?.customerAddress === "string") data.customerAddress = req.body.customerAddress.trim() || null
+    if (typeof req.body?.deliveryFee !== "undefined") {
+      const fee = parsePriceToDecimalString(req.body.deliveryFee)
+      if (fee === null) return res.status(400).json({ error: "deliveryFee inválido" })
+      data.deliveryFee = fee
+    }
+    if (typeof req.body?.deliveryManId !== "undefined") {
+      const deliveryManId = parseIntOrNull(req.body.deliveryManId)
+      if (!deliveryManId) return res.status(400).json({ error: "deliveryManId inválido" })
+      const driver = await prisma.deliveryMen.findFirst({ where: { id: deliveryManId, tenantId }, select: { id: true } })
+      if (!driver) return res.status(400).json({ error: "Entregador inválido" })
+      data.deliveryManId = deliveryManId
+    }
     if (typeof req.body?.status === "string") {
       const status = parseOrderStatus(req.body.status)
       if (!status) return res.status(400).json({ error: "status inválido" })
+      if (status === "out_for_delivery" && existing.type !== "delivery") {
+        return res.status(400).json({ error: "Pedido não é do tipo delivery" })
+      }
       data.status = status
+      if (existing.status !== status) data.statusChangedAt = new Date()
     }
 
-    const order = await prisma.order.update({
-      where: { id },
-      data,
-      include: {
-        table: true,
-        items: { include: { product: true, options: { include: { option: true } } } },
-      },
-    })
+    if (typeof data.deliveryFee !== "undefined") {
+      const orderWithItems = await prisma.order.findFirst({
+        where: { tenantId, id },
+        select: {
+          id: true,
+          items: {
+            select: {
+              quantity: true,
+              unitPrice: true,
+              options: { select: { quantity: true, priceAdded: true } },
+            },
+          },
+        },
+      })
+      if (orderWithItems) {
+        const itemsCents = calculateItemsTotalCentsFromOrder(orderWithItems)
+        const feeCents = decimalStringToCents(data.deliveryFee)
+        if (feeCents !== null) data.total = centsToDecimalString(itemsCents + feeCents)
+      }
+    }
+
+    let order
+    try {
+      order = await prisma.order.update({ where: { id }, data, select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }) })
+    } catch (err) {
+      if (!isMissingAnyOrderColumns(err)) throw err
+      const fallbackData = { ...data }
+      delete fallbackData.statusChangedAt
+      delete fallbackData.deliveryFee
+      delete fallbackData.deliveryManId
+      order = await prisma.order.update({ where: { id }, data: fallbackData, select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }) })
+      if (typeof data.statusChangedAt !== "undefined") order.statusChangedAt = new Date()
+    }
 
     return res.status(200).json(order)
   } catch (error) {
@@ -414,4 +597,3 @@ router.delete("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =
 })
 
 export default router
-

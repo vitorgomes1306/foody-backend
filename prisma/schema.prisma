@@ -12,41 +12,43 @@ datasource db {
 // TENANT (Food Truck)
 // ─────────────────────────────────────────
 model Tenant {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String   @unique
-  logoUrl   String?
-  phone     String?
-  ownerId   Int
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  zipCode   String?
-  street    String?
-  number    String?
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  phone       String?
+  deliveryFee Decimal  @default(0) @db.Decimal(10, 2)
+  ownerId     Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  zipCode     String?
+  street      String?
+  number      String?
   complement  String?
-  district  String?
-  city      String?
-  state     String?
-  country   String?
-  email     String?
-  website   String?
-  instagram String?
-  facebook  String?
-  twitter   String?
-  youtube   String?
+  district    String?
+  city        String?
+  state       String?
+  country     String?
+  email       String?
+  website     String?
+  instagram   String?
+  facebook    String?
+  twitter     String?
+  youtube     String?
   geoLocation String?
 
   // Relacionamentos
-  owner      User          @relation(fields: [ownerId], references: [id])
-  media      TenantMedia[]
-  openingHours TenantOpeningHour[]
-  paymentMethods TenantPaymentMethod[]
+  owner           User                  @relation(fields: [ownerId], references: [id])
+  media           TenantMedia[]
+  openingHours    TenantOpeningHour[]
+  paymentMethods  TenantPaymentMethod[]
   deliveryDrivers DeliveryDriver[]
-  categories Category[]
-  products   Product[]
-  orders     Order[]
-  tables     Table[]
+  deliveryMen     deliveryMen[]
+  categories      Category[]
+  products        Product[]
+  orders          Order[]
+  tables          Table[]
 }
 
 model TenantOpeningHour {
@@ -66,14 +68,14 @@ model TenantOpeningHour {
 }
 
 model TenantPaymentMethod {
-  id        Int      @id @default(autoincrement())
-  tenantId  String   @db.Uuid
+  id        Int               @id @default(autoincrement())
+  tenantId  String            @db.Uuid
   type      PaymentMethodType
-  enabled   Boolean  @default(true)
+  enabled   Boolean           @default(true)
   label     String?
   details   Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -216,7 +218,10 @@ model Order {
   tableId         Int?
   type            OrderType
   status          OrderStatus @default(pending)
+  statusChangedAt DateTime    @default(now())
   total           Decimal     @db.Decimal(10, 2)
+  deliveryFee     Decimal     @default(0) @db.Decimal(10, 2)
+  deliveryManId   Int?
   notes           String?
   customerName    String?
   customerPhone   String?
@@ -224,10 +229,11 @@ model Order {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  tenant Tenant      @relation(fields: [tenantId], references: [id])
-  user   User?       @relation(fields: [userId], references: [id])
-  table  Table?      @relation(fields: [tableId], references: [id])
-  items  OrderItem[]
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  user        User?        @relation(fields: [userId], references: [id])
+  table       Table?       @relation(fields: [tableId], references: [id])
+  deliveryMan deliveryMen? @relation(fields: [deliveryManId], references: [id])
+  items       OrderItem[]
 }
 
 // ─────────────────────────────────────────
@@ -270,8 +276,9 @@ enum Role {
 }
 
 enum OrderType {
-  local
-  delivery
+  local // consumir no local
+  delivery // entrega
+  pickup // retirada no local
 }
 
 enum OrderStatus {
@@ -279,6 +286,7 @@ enum OrderStatus {
   confirmed // confirmado
   preparing // preparando
   ready // pronto
+  out_for_delivery // em entrega
   delivered // entregue
   cancelled // cancelado  // entreg
   returned //  devolvido
@@ -301,4 +309,24 @@ enum PaymentMethodType {
   credit_card
   voucher
   other
+}
+
+// ─────────────────────────────────────────
+// ENTREGADORES
+// ─────────────────────────────────────────
+model deliveryMen {
+  id           Int     @id @default(autoincrement())
+  name         String
+  phone        String
+  email        String?
+  address      String
+  plateVehicle String // placa do veiculo
+  modelvehicle String // modelo do veiculo
+  avatar       String?
+  // relação com o Tenant
+  tenantId     String  @db.Uuid
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders       Order[]
+
+  @@index([tenantId])
 }

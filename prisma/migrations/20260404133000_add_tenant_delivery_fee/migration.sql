@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "deliveryFee" DECIMAL(10,2) NOT NULL DEFAULT 0;
+
