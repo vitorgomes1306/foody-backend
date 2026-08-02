@@ -22,6 +22,7 @@ import reportRoutes from './routes/report.js';
 import healthRoutes from './routes/health.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhook.js';
+import addressRoutes from './routes/address.js';
 
 
 
@@ -43,6 +44,7 @@ app.use(express.json({
 app.use('/uploads', express.static(uploadsRoot));
 app.use(healthRoutes);
 app.use(whatsappWebhookRoutes);
+app.use('/api', addressRoutes);
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', tenantRoutes);

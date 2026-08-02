@@ -120,6 +120,7 @@ function isMissingAnyOrderColumns(err) {
     isMissingOrderColumn(err, "waiterCommissionPercent") ||
     isMissingOrderColumn(err, "waiterCommissionAmount") ||
     isMissingOrderColumn(err, "waiterCommissionAddedToTotal")
+    || isMissingOrderColumn(err, "customerSessionId")
   )
 }
 
@@ -245,6 +246,8 @@ async function buildOrderCreateData({ tenantId, body }) {
   const customerName = typeof body?.customerName === "string" ? body.customerName.trim() : null
   const customerPhone = typeof body?.customerPhone === "string" ? body.customerPhone.trim() : null
   const customerAddress = typeof body?.customerAddress === "string" ? body.customerAddress.trim() : null
+  const paymentMethodType = parsePaymentMethodType(body?.paymentMethodType)
+  const customerSessionId = typeof body?.customerSessionId === "string" && /^[a-zA-Z0-9-]{20,80}$/.test(body.customerSessionId) ? body.customerSessionId : null
 
   if (waiterId) {
     const waiter = await prisma.waiter.findFirst({ where: { id: waiterId, tenantId, active: true }, select: { id: true } })
@@ -414,6 +417,8 @@ async function buildOrderCreateData({ tenantId, body }) {
       customerName: customerName || null,
       customerPhone: customerPhone || null,
       customerAddress: customerAddress || null,
+      paymentMethodType,
+      customerSessionId,
       tableNumber: typeof tableNumber === "number" ? tableNumber : null,
       waiterId: waiterId || null,
       itemsToCreate,
@@ -427,6 +432,11 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
     const { slug } = req.params
     const tenantId = await resolveTenantIdFromSlug(slug)
     if (!tenantId) return res.status(404).json({ error: "Tenant não encontrado" })
+    if (!['delivery', 'pickup'].includes(req.body?.type)) return res.status(400).json({ error: "Escolha Delivery ou Retirada" })
+    if (!['cash', 'pix', 'debit_card', 'credit_card'].includes(req.body?.paymentMethodType)) return res.status(400).json({ error: "Escolha uma forma de pagamento válida" })
+    if (!req.body?.customerSessionId) return res.status(400).json({ error: "Sessão do cliente não informada" })
+    if (!String(req.body?.customerName || '').trim() || !String(req.body?.customerPhone || '').trim()) return res.status(400).json({ error: "Nome e telefone são obrigatórios" })
+    if (req.body.type === 'delivery' && !String(req.body?.customerAddress || '').trim()) return res.status(400).json({ error: "Endereço é obrigatório para Delivery" })
 
     const openingHours = await prisma.tenantOpeningHour.findMany({ where: { tenantId } })
     const openingStatus = getBusinessOpeningStatus(openingHours)
@@ -467,6 +477,8 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
           customerName: built.data.customerName,
           customerPhone: built.data.customerPhone,
           customerAddress: built.data.customerAddress,
+          paymentMethodType: built.data.paymentMethodType,
+          customerSessionId: built.data.customerSessionId,
           items: { create: built.data.itemsToCreate },
         },
       }
@@ -482,6 +494,8 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
         delete fallbackCreateArgs.data.deliveryFee
         delete fallbackCreateArgs.data.statusChangedAt
         delete fallbackCreateArgs.data.waiterId
+        delete fallbackCreateArgs.data.paymentMethodType
+        delete fallbackCreateArgs.data.customerSessionId
         return await tx.order.create({ ...fallbackCreateArgs, select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }) })
       }
     })
@@ -490,6 +504,27 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: "Erro interno do servidor" })
+  }
+})
+
+router.get("/public/tenant/:slug/orders/history", async (req, res) => {
+  try {
+    const tenantId = await resolveTenantIdFromSlug(req.params.slug)
+    if (!tenantId) return res.status(404).json({ error: "Tenant não encontrado" })
+    const customerSessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId.trim() : ''
+    if (!/^[a-zA-Z0-9-]{20,80}$/.test(customerSessionId)) return res.status(400).json({ error: "Sessão do cliente inválida" })
+    const orders = await prisma.order.findMany({
+      where: { tenantId, customerSessionId }, orderBy: { createdAt: 'desc' }, take: 50,
+      select: {
+        id: true, type: true, status: true, total: true, deliveryFee: true, paymentMethodType: true,
+        customerName: true, customerAddress: true, notes: true, createdAt: true,
+        items: { select: { id: true, quantity: true, unitPrice: true, notes: true, product: { select: { name: true } }, flavors: { select: { nameApplied: true, fraction: true } }, options: { select: { quantity: true, priceAdded: true, option: { select: { name: true } } } } } },
+      },
+    })
+    return res.json(orders)
+  } catch (error) {
+    console.error('Erro ao carregar histórico público:', error)
+    return res.status(500).json({ error: 'Erro ao carregar histórico de pedidos' })
   }
 })
 

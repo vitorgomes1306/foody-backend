@@ -343,6 +343,7 @@ model Order {
   customerName                 String?
   customerPhone                String?
   customerAddress              String?
+  customerSessionId            String?
   createdAt                    DateTime           @default(now())
   updatedAt                    DateTime           @updatedAt
 
@@ -352,6 +353,8 @@ model Order {
   deliveryMan deliveryMen? @relation(fields: [deliveryManId], references: [id])
   waiter      Waiter?      @relation(fields: [waiterId], references: [id])
   items       OrderItem[]
+
+  @@index([tenantId, customerSessionId, createdAt])
 }
 
 model Waiter {
