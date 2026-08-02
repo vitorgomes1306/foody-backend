@@ -2,6 +2,7 @@ import express from "express"
 import { PrismaClient } from "@prisma/client"
 import authMiddleware from "../middlewares/auth.js"
 import { getBusinessOpeningStatus } from "../utils/openingHours.js"
+import { notifyOrderCreated, notifyOrderStatusChanged } from "../utils/orderWhatsAppNotification.js"
 
 const prisma = new PrismaClient()
 const router = express.Router()
@@ -501,6 +502,7 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
       }
     })
 
+    void notifyOrderCreated(prisma, order)
     return res.status(201).json(order)
   } catch (error) {
     console.error(error)
@@ -898,6 +900,7 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
       if (typeof data.statusChangedAt !== "undefined") order.statusChangedAt = new Date()
     }
 
+    if (existing.status !== order.status) void notifyOrderStatusChanged(prisma, order)
     return res.status(200).json(order)
   } catch (error) {
     console.error(error)
