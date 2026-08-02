@@ -95,6 +95,9 @@ router.get('/tenant/:tenantId/whatsapp-channel', authMiddleware, async (req, res
     res.json({ official: officialView(channels.official), evolution: evolutionView(channels.evolution) })
   } catch (error) {
     console.error('Erro ao listar canais WhatsApp:', error)
+    if (['P2021', 'P2022'].includes(error.code)) {
+      return res.status(503).json({ error: 'Banco de dados desatualizado. Execute as migrations do WhatsApp no backend.' })
+    }
     res.status(500).json({ error: 'Erro ao carregar configuração do WhatsApp' })
   }
 })

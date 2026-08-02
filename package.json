@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
+    "prestart": "prisma migrate deploy",
     "start": "node server.js",
     "build": "prisma generate",
     "migrate:dev": "prisma migrate dev",
@@ -19,13 +20,13 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "pg": "^8.20.0",
+    "prisma": "^5.0.0",
     "serverless-http": "^4.0.0",
     "slugify": "^1.6.8",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.0",
-    "prisma": "^5.0.0"
+    "nodemon": "^3.0.0"
   },
   "engines": {
     "node": ">=18"
