@@ -19,6 +19,7 @@ import optionsRoutes from './routes/options.js';
 import mediaLibraryRoutes from './routes/mediaLibrary.js';
 import waiterRoutes from './routes/waiter.js';
 import reportRoutes from './routes/report.js';
+import healthRoutes from './routes/health.js';
 
 
 
@@ -33,6 +34,7 @@ app.use(cors({
 // configuração do servidor com express.json
 app.use(express.json());
 app.use('/uploads', express.static(uploadsRoot));
+app.use(healthRoutes);
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', tenantRoutes);

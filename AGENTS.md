@@ -1,23 +1,18 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-02 6:52am GMT-3
+# [foody] recent context, 2026-08-02 7:20am GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,264t read) | 309,961t work | 94% savings
+Stats: 50 obs (19,287t read) | 451,249t work | 96% savings
 
 ### Aug 1, 2026
 S295 Fix Supabase image uploads in the foody/chefito project — credentials were empty, then the configured project was found to be unreachable (DNS ENOTFOUND). User now wants to switch to a different Supabase project. (Aug 1 at 1:25 PM)
 S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase project DNS unreachable), user wants to switch to a different/working Supabase project (Aug 1 at 1:25 PM)
-1697 10:34p 🟣 Flavor Ordering Logic Implemented in routes/order.js
-1699 10:35p 🔵 CounterOrdersPage.jsx apply_patch Fails Again Due to Minified Single-Line JSX
-1700 " 🟣 CounterOrdersPage.jsx Updated for Flavor Cart Logic
-1701 " 🔵 CounterOrdersPage.jsx Flavor Picker Modal Blocked by Single-Line fractionBase Modal
-1702 10:36p 🔵 CounterOrdersPage.jsx Cannot Be Patched — Entire Modal Section is One Line
-1703 " 🟣 Flavor Picker Modal Added to CounterOrdersPage.jsx via Full-Line Replacement
+1703 10:36p 🟣 Flavor Picker Modal Added to CounterOrdersPage.jsx via Full-Line Replacement
 1704 " 🟣 Public Menu (App.jsx) Options Modal Updated for Flavor Selection
 1705 10:37p 🟣 Migration 20260801233000_add_product_flavors Applied to Production Database
 1706 " 🟣 Order Item Flavor Display Added to App.jsx and OrdersBoard.jsx
@@ -63,6 +58,11 @@ S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase 
 1745 12:07a 🟣 OrdersBoard "Marcar como pronto" Button Build Confirmed
 1747 12:16a 🟣 Detailed Daily Orders Report Modal — "Pedidos hoje" Card
 1748 " 🔵 Codebase State Before Detailed Daily Orders Report Feature
+1749 " 🟣 Order Source Filter Tabs in "Prontos para entrega" Column — /orders Board
+1750 12:24a 🟣 Sales Dashboard "Pedidos do dia" Tab — Modal Replaced with Dedicated Tab
+1751 " 🟣 Backend `todayOrders` Raw Array Exposed in Sales Report API
+1752 " 🔵 OrdersBoard Card Model Missing `waiterId` — Needed for Ready Column Source Filter
+1753 6:54a 🟣 Source Filter Tabs in "Prontos para entrega" Column — OrdersBoard
 
-Access 310k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 451k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
