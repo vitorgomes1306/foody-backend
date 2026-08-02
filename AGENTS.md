@@ -1,46 +1,17 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-02 9:42am GMT-3
+# [foody] recent context, 2026-08-02 2:22pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,548t read) | 506,708t work | 96% savings
+Stats: 50 obs (19,849t read) | 415,009t work | 95% savings
 
 ### Aug 1, 2026
 S295 Fix Supabase image uploads in the foody/chefito project — credentials were empty, then the configured project was found to be unreachable (DNS ENOTFOUND). User now wants to switch to a different Supabase project. (Aug 1 at 1:25 PM)
 S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase project DNS unreachable), user wants to switch to a different/working Supabase project (Aug 1 at 1:25 PM)
-1714 10:40p 🔵 App.jsx allowFraction Section Already Replaced — Patch Anchor No Longer Exists
-1715 " 🟣 usesFlavors and allowFraction Are Now Mutually Exclusive — Auto-Clear on Server
-1716 " 🔵 npx prisma migrate status Always Fails from exec_command Due to Network Isolation
-1717 " 🟣 Auto-Accept Orders Bypass KDS
-1718 10:51p 🔴 Auto-Accept Orders Now Sets Status to "preparing" Instead of "confirmed"
-1719 " ✅ Main Layout: Scrollable Pages, Board-Only Overflow Hidden
-1720 " 🔴 OrderItem kitchenStatus Also Set to "preparing" on Auto-Accept
-1721 10:53p ✅ Order Card Hides Total for Non-Addition Orders
-1722 10:56p 🟣 KDS Addition Items Merge Back to Main Order Card When Ready
-1723 11:05p 🟣 Orders Board Cards Now Show Full Item Details
-1724 11:10p ⚖️ Auto-Print Orders on KDS Production — Architecture Discussion
-1725 11:32p 🟣 WaiterMyOrdersPage Rewritten with Full Item Details and Bill Closing
-1726 11:34p 🔵 apply_patch Fails on Freshly Written Single-Line JSX in WaiterMyOrdersPage
-1727 11:35p 🟣 Waiter Commission Fields Added to Bill Closing Flow
-1728 " 🟣 Bill Closing Modal UI Updated with Commission Summary and Fields
-1729 11:36p 🔵 Sidebar Navigation Architecture in Chefito Frontend
-1730 " 🟣 Sales Report API Endpoint Created
-1731 11:42p 🟣 Sales Dashboard Frontend Page Created
-1732 " 🟣 Sales Dashboard CSS Styles and paidAt-based Filtering Added
-1733 11:49p 🔵 Payment Method Data Structure in Foody Codebase
-1734 " 🟣 Payment Methods Breakdown Card Added to Sales Dashboard
-1735 11:50p 🟣 Payment Methods Dashboard Feature Build Verified
-1736 11:51p 🔵 Order Type System and Full Order Prisma Schema Mapped
-1738 " 🟣 Order Source Breakdown Panel Added to Sales Dashboard
-1740 " 🔵 Flavor Name and Price Layout Bug in CounterProductConfigurator
-1737 11:52p 🔵 Order Creation Routes and Type Flow Architecture
-1741 " 🔴 Fixed Flavor Name/Price Layout in CounterProductConfigurator
-1739 11:53p 🟣 Order Source Panel Build Verified — Dashboard Feature Complete
-1743 11:58p 🔵 OrdersBoard Production Column Lacks "Mark Ready" Button
 ### Aug 2, 2026
 1742 12:00a 🔴 Flavor Button Layout Fix Build Confirmed in CounterProductConfigurator
 1744 12:06a 🟣 "Marcar como pronto" Button Added to OrdersBoard Production Column
@@ -63,6 +34,35 @@ S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase 
 1762 " 🔵 Railway Database Now Connected — /test/database Returns 200
 1763 " 🔵 Login Returns 500 — Prisma Tables Missing, Migrations Never Deployed
 1764 9:39a 🔵 34 Prisma Migrations Never Applied to Railway — Full Schema History
+1765 9:42a 🔵 Migrations Deployed — Registration Works, Login Returns 500
+1766 9:43a 🔵 Login Route Works for Non-Existent Users — Fails Only for Real Users
+1767 " 🔴 Fixed: Users Created Active=true + JWT_SECRET Guard Added to Login
+1768 9:54a 🔵 Vercel SPA Refresh Returns 404 — Missing Rewrite Rule
+1769 " 🔴 Added vercel.json SPA Fallback Rewrite to Fix F5 404
+1770 10:03a 🔵 Production Images Broken — /uploads Paths Resolve Against Vercel CDN
+1771 " 🔵 Scope of /uploads Image URLs — 10+ <img> Sites Need apiUrl() Prefix
+1772 10:04a 🔴 Fixed Production Image URLs — assetUrl() Helper Rewrites /uploads Paths
+1773 " 🔵 Railway Filesystem Serves Uploaded Images — But Files Are Ephemeral
+1774 " ⚖️ New Feature: Local Print Node for Order Receipts
+1775 10:20a 🟣 Local Print Agent Implemented — Chefito Print Agent
+1776 10:23a 🔴 Print Agent Node 18 Compatibility — Replaced import.meta.dirname with fileURLToPath
+1777 10:33a 🔵 Print Agent Detects Orders But Doesn't Print — PRINT_MODE Configuration Question
+1779 " 🔵 Thermal Print Output Too Narrow — PAPER_WIDTH Doesn't Match Printer Paper
+1780 " 🔵 Thermal Print Receipt Shows Only ~10 Characters Per Line With Tiny Font
+1778 11:01a 🟣 Tenant UUID Display Added to Company Edit Modal
+1781 11:40a 🔵 User's Thermal Printer Identified: Tomate MDK-082
+1782 " 🔵 Tomate MDK-082 Confirmed as 80mm ESC/POS Thermal Printer
+1783 11:42a 🟣 Print Agent: ESC/POS Raw Mode + Windows RAW Spooler Script
+1784 " 🔵 ESC/POS Patch Failed — All Files Still at Old State
+1785 11:43a 🟣 Print Agent: Windows RAW Print Script and Config vars Applied (printer.js Pending)
+1786 " 🔴 Print Agent: ESC/POS Raw Printing Fully Applied — Fixes Tiny Font on Windows
+1787 " 🔵 Print Agent ESC/POS Rewrite Verified — PAPER_WIDTH Still 42 in Active .env
+1788 11:54a 🔵 Windows Raw Print Script Fails with Exit Code 1 — Printing Broken After ESC/POS Rewrite
+1789 " 🔴 Print Agent: Stderr Capture Added + C# out-variable Syntax Fixed for Older .NET
+1790 11:57a 🔵 Windows Machine Has Stale Print Agent — SMB Share Shows Old printer.js Without ESC/POS Patches
+1791 " 🟣 Print Agent Files Synced to Windows Machine via SMB Share
+1792 11:58a 🔵 Windows Print Agent Configuration Verified — Printer Name is "termica2"
+1793 12:05p 🔵 PM2 `startup` Command Fails on Windows — "Init system not found"
 
-Access 507k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 415k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

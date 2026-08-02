@@ -20,6 +20,8 @@ import mediaLibraryRoutes from './routes/mediaLibrary.js';
 import waiterRoutes from './routes/waiter.js';
 import reportRoutes from './routes/report.js';
 import healthRoutes from './routes/health.js';
+import whatsappRoutes from './routes/whatsapp.js';
+import whatsappWebhookRoutes from './routes/whatsappWebhook.js';
 
 
 
@@ -32,9 +34,15 @@ app.use(cors({
 
 
 // configuração do servidor com express.json
-app.use(express.json());
+app.use(express.json({
+  limit: '5mb',
+  verify: (req, _res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use('/uploads', express.static(uploadsRoot));
 app.use(healthRoutes);
+app.use(whatsappWebhookRoutes);
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', tenantRoutes);
@@ -46,6 +54,7 @@ app.use('/api', optionsRoutes);
 app.use('/api', mediaLibraryRoutes);
 app.use('/api', waiterRoutes);
 app.use('/api', reportRoutes);
+app.use('/api', whatsappRoutes);
 
 
 // configuração da porta do servidor

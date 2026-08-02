@@ -51,6 +51,54 @@ model Tenant {
   products        Product[]
   orders          Order[]
   tables          Table[]
+  whatsAppChannels WhatsAppChannel[]
+  whatsAppWebhookEvents WhatsAppWebhookEvent[]
+}
+
+enum WhatsAppProvider {
+  official
+  evolution
+}
+
+model WhatsAppChannel {
+  id                       String           @id @default(uuid()) @db.Uuid
+  tenantId                 String           @db.Uuid
+  provider                 WhatsAppProvider
+  active                   Boolean          @default(false)
+  status                   String           @default("disconnected")
+  wabaId                   String?
+  phoneNumberId            String?
+  accessTokenEncrypted     String?
+  appSecretEncrypted       String?
+  evolutionInstanceName    String?
+  evolutionInstanceId      String?
+  connectedNumber          String?
+  selectedForMessaging     Boolean          @default(false)
+  messagingStartedAt       DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@index([tenantId, selectedForMessaging])
+}
+
+model WhatsAppWebhookEvent {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @db.Uuid
+  provider    WhatsAppProvider
+  eventType   String
+  externalId  String?
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, provider, createdAt])
+  @@index([externalId])
 }
 
 model TenantOpeningHour {
