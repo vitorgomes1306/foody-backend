@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE IF EXISTS "MediaLibraryImage" ALTER COLUMN "id" DROP DEFAULT;

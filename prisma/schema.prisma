@@ -18,6 +18,7 @@ model Tenant {
   logoUrl     String?
   phone       String?
   deliveryFee Decimal  @default(0) @db.Decimal(10, 2)
+  settings    Json?
   ownerId     Int
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -45,6 +46,7 @@ model Tenant {
   paymentMethods  TenantPaymentMethod[]
   deliveryDrivers DeliveryDriver[]
   deliveryMen     deliveryMen[]
+  waiters         Waiter[]
   categories      Category[]
   products        Product[]
   orders          Order[]
@@ -110,6 +112,27 @@ model TenantMedia {
   @@index([tenantId])
 }
 
+model MediaLibraryImage {
+  id           String   @id @default(uuid()) @db.Uuid
+  url          String
+  path         String
+  bucket       String
+  mimeType     String?
+  sizeBytes    Int?
+  title        String?
+  description  String?
+  category     String?
+  keywords     String[] @default([])
+  uploadedById Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  uploadedBy User? @relation(fields: [uploadedById], references: [id])
+
+  @@index([uploadedById])
+  @@index([createdAt])
+}
+
 // ─────────────────────────────────────────
 // USUÁRIO
 // ─────────────────────────────────────────
@@ -123,8 +146,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenants Tenant[]
-  orders  Order[]
+  tenants            Tenant[]
+  orders             Order[]
+  mediaLibraryImages MediaLibraryImage[]
 }
 
 // ─────────────────────────────────────────
@@ -152,6 +176,10 @@ model Product {
   price       Decimal  @db.Decimal(10, 2)
   imageUrl    String?
   active      Boolean  @default(true)
+  allowFraction Boolean @default(false)
+  skipKds       Boolean @default(false)
+  usesFlavors   Boolean @default(false)
+  maxFlavors    Int     @default(1)
   tenantId    String   @db.Uuid
   categoryId  Int
   createdAt   DateTime @default(now())
@@ -159,10 +187,28 @@ model Product {
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   category     Category      @relation(fields: [categoryId], references: [id])
-  orderItems   OrderItem[]
+  orderItems   OrderItem[] @relation("OrderItemProduct")
+  fractionOrderItems OrderItem[] @relation("OrderItemFractionProduct")
   optionGroups OptionGroup[]
+  flavors      ProductFlavor[]
 
   @@unique([tenantId, seq])
+}
+
+model ProductFlavor {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  name      String
+  price     Decimal  @db.Decimal(10, 2)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItemFlavor[]
+
+  @@unique([productId, name])
+  @@index([productId])
 }
 
 // ─────────────────────────────────────────
@@ -212,44 +258,93 @@ model Table {
 // PEDIDO
 // ─────────────────────────────────────────
 model Order {
-  id              Int         @id @default(autoincrement())
-  tenantId        String      @db.Uuid
-  userId          Int?
-  tableId         Int?
-  type            OrderType
-  status          OrderStatus @default(pending)
-  statusChangedAt DateTime    @default(now())
-  total           Decimal     @db.Decimal(10, 2)
-  deliveryFee     Decimal     @default(0) @db.Decimal(10, 2)
-  deliveryManId   Int?
-  notes           String?
-  customerName    String?
-  customerPhone   String?
-  customerAddress String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                           Int                @id @default(autoincrement())
+  tenantId                     String             @db.Uuid
+  userId                       Int?
+  tableId                      Int?
+  type                         OrderType
+  status                       OrderStatus        @default(pending)
+  statusChangedAt              DateTime           @default(now())
+  total                        Decimal            @db.Decimal(10, 2)
+  deliveryFee                  Decimal            @default(0) @db.Decimal(10, 2)
+  deliveryManId                Int?
+  waiterId                     Int?
+  paymentMethodType            PaymentMethodType?
+  paidAt                       DateTime?
+  discountAmount               Decimal            @default(0) @db.Decimal(10, 2)
+  waiterCommissionPercent      Decimal            @default(0) @db.Decimal(5, 2)
+  waiterCommissionAmount       Decimal            @default(0) @db.Decimal(10, 2)
+  waiterCommissionAddedToTotal Boolean            @default(false)
+  notes                        String?
+  customerName                 String?
+  customerPhone                String?
+  customerAddress              String?
+  createdAt                    DateTime           @default(now())
+  updatedAt                    DateTime           @updatedAt
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
   user        User?        @relation(fields: [userId], references: [id])
   table       Table?       @relation(fields: [tableId], references: [id])
   deliveryMan deliveryMen? @relation(fields: [deliveryManId], references: [id])
+  waiter      Waiter?      @relation(fields: [waiterId], references: [id])
   items       OrderItem[]
+}
+
+model Waiter {
+  id        Int      @id @default(autoincrement())
+  tenantId  String   @db.Uuid
+  name      String
+  username  String
+  password  String
+  phone     String?
+  email     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([tenantId, username])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────
 // ITEM DO PEDIDO
 // ─────────────────────────────────────────
 model OrderItem {
-  id        Int     @id @default(autoincrement())
-  orderId   Int
-  productId Int
-  quantity  Int
-  unitPrice Decimal @db.Decimal(10, 2)
-  notes     String?
+  id            Int          @id @default(autoincrement())
+  orderId       Int
+  productId     Int
+  fractionProductId Int?
+  quantity      Int
+  unitPrice     Decimal      @db.Decimal(10, 2)
+  notes         String?
+  kitchenStatus OrderStatus?
+  addedAt       DateTime?
 
   order   Order             @relation(fields: [orderId], references: [id])
-  product Product           @relation(fields: [productId], references: [id])
+  product Product           @relation("OrderItemProduct", fields: [productId], references: [id])
+  fractionProduct Product?  @relation("OrderItemFractionProduct", fields: [fractionProductId], references: [id])
   options OrderItemOption[]
+  flavors OrderItemFlavor[]
+
+  @@index([fractionProductId])
+}
+
+model OrderItemFlavor {
+  id          Int     @id @default(autoincrement())
+  orderItemId Int
+  flavorId    Int
+  nameApplied String
+  priceApplied Decimal @db.Decimal(10, 2)
+  fraction    Decimal @db.Decimal(5, 4)
+
+  orderItem OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  flavor    ProductFlavor @relation(fields: [flavorId], references: [id])
+
+  @@index([orderItemId])
+  @@index([flavorId])
 }
 
 // ─────────────────────────────────────────
@@ -315,18 +410,24 @@ enum PaymentMethodType {
 // ENTREGADORES
 // ─────────────────────────────────────────
 model deliveryMen {
-  id           Int     @id @default(autoincrement())
+  id           Int          @id @default(autoincrement())
   name         String
   phone        String
   email        String?
   address      String
   plateVehicle String // placa do veiculo
   modelvehicle String // modelo do veiculo
+  typeVehicle  TypeVehicle?
   avatar       String?
   // relação com o Tenant
-  tenantId     String  @db.Uuid
-  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId     String       @db.Uuid
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   orders       Order[]
 
   @@index([tenantId])
+}
+
+enum TypeVehicle {
+  Moto
+  Carro
 }

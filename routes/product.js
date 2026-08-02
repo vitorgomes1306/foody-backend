@@ -1,9 +1,9 @@
 import express from "express"
 import { PrismaClient } from "@prisma/client"
 import multer from "multer"
-import { createClient } from "@supabase/supabase-js"
 import { v4 as uuidv4 } from "uuid"
 import authMiddleware from "../middlewares/auth.js"
+import { saveLocalUpload } from "../utils/localUploads.js"
 
 const prisma = new PrismaClient()
 const router = express.Router()
@@ -12,16 +12,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
 })
-
-function getSupabaseClient() {
-  const url = process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceRoleKey) return null
-
-  return createClient(url, serviceRoleKey, {
-    auth: { persistSession: false },
-  })
-}
 
 function extensionFromMimeType(mimeType) {
   if (mimeType === "image/jpeg") return "jpg"
@@ -75,23 +65,8 @@ async function fetchImageAsFileBuffer(url) {
   }
 }
 
-async function uploadFileToSupabase({ supabase, bucket, path, file, upsert }) {
-  const { error } = await supabase.storage.from(bucket).upload(path, file.buffer, {
-    contentType: file.mimetype,
-    upsert: Boolean(upsert),
-  })
-
-  if (error) {
-    throw new Error(error.message || "Falha ao enviar arquivo para o Supabase Storage")
-  }
-
-  const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(path)
-  const publicUrl = publicUrlResult?.data?.publicUrl
-  if (!publicUrl) {
-    throw new Error("Falha ao gerar URL pública do arquivo enviado")
-  }
-
-  return { publicUrl, path }
+async function uploadFileLocally({ path, file }) {
+  return saveLocalUpload({ relativePath: path, buffer: file.buffer })
 }
 
 // middleware para verificar se o usuário é o proprietário do tenant (food truck)
@@ -179,7 +154,7 @@ router.get("/tenant/:tenantId/products/next-seq", authMiddleware, async (req, re
 router.get("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
   try {
     const { tenantId } = req.params
-    const allowed = await assertTenantOwner({ tenantId, userId: req.userId })
+    const allowed = (req.authRole === "waiter" && req.tenantId === tenantId) || await assertTenantOwner({ tenantId, userId: req.userId })
     if (!allowed) return res.status(403).json({ error: "Acesso negado ao tenant" })
 
     const active =
@@ -188,6 +163,7 @@ router.get("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
     const products = await prisma.product.findMany({
       where: { tenantId, ...(typeof active === "boolean" ? { active } : {}) },
       orderBy: [{ seq: "asc" }, { id: "asc" }],
+      include: { flavors: { where: { active: true }, orderBy: [{ name: "asc" }, { id: "asc" }] }, optionGroups: { orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } } },
     })
 
     return res.status(200).json(products)
@@ -255,6 +231,10 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
     const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl.trim() : null
     const categoryId = parseIntOrNull(req.body?.categoryId)
     const active = typeof req.body?.active === "boolean" ? req.body.active : true
+    const allowFraction = req.body?.allowFraction === true
+    const skipKds = req.body?.skipKds === true
+    const usesFlavors = req.body?.usesFlavors === true
+    const maxFlavors = usesFlavors ? Math.min(2, Math.max(1, parseIntOrNull(req.body?.maxFlavors) || 1)) : 1
 
     if (!name || !price || !categoryId) {
       return res.status(400).json({ error: "Dados obrigatórios faltando" })
@@ -269,6 +249,10 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
         imageUrl: imageUrl || null,
         categoryId,
         active,
+        allowFraction,
+        skipKds,
+        usesFlavors,
+        maxFlavors,
       },
     })
 
@@ -304,6 +288,17 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
     }
     if (typeof req.body?.imageUrl === "string") data.imageUrl = normalizeRemoteImageUrl(req.body.imageUrl) || null
     if (typeof req.body?.active === "boolean") data.active = req.body.active
+    if (typeof req.body?.allowFraction === "boolean") data.allowFraction = req.body.allowFraction
+    if (typeof req.body?.skipKds === "boolean") data.skipKds = req.body.skipKds
+    if (typeof req.body?.usesFlavors === "boolean") {
+      data.usesFlavors = req.body.usesFlavors
+      if (req.body.usesFlavors) data.allowFraction = false
+    }
+    if (typeof req.body?.maxFlavors !== "undefined") {
+      const maxFlavors = parseIntOrNull(req.body.maxFlavors)
+      if (!maxFlavors || maxFlavors < 1 || maxFlavors > 2) return res.status(400).json({ error: "maxFlavors deve ser 1 ou 2" })
+      data.maxFlavors = maxFlavors
+    }
     if (typeof req.body?.categoryId !== "undefined") {
       const categoryId = parseIntOrNull(req.body.categoryId)
       if (!categoryId) return res.status(400).json({ error: "categoryId inválido" })
@@ -329,17 +324,9 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
           return res.status(400).json({ error: "Host não permitido" })
         }
 
-        const supabase = getSupabaseClient()
-        const bucket = process.env.SUPABASE_STORAGE_BUCKET || "tenants"
-        if (!supabase) {
-          return res.status(500).json({ error: "Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)" })
-        }
-
         const fetched = await fetchImageAsFileBuffer(remoteImageUrl)
         const path = `${tenantId}/products/${id}/${uuidv4()}.${fetched.ext}`
-        const uploaded = await uploadFileToSupabase({
-          supabase,
-          bucket,
+        const uploaded = await uploadFileLocally({
           path,
           file: { buffer: fetched.buffer, mimetype: fetched.mimetype },
           upsert: false,
@@ -354,17 +341,9 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
         return res.status(400).json({ error: "A imagem deve ser um arquivo de imagem" })
       }
 
-      const supabase = getSupabaseClient()
-      const bucket = process.env.SUPABASE_STORAGE_BUCKET || "tenants"
-      if (!supabase) {
-        return res.status(500).json({ error: "Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)" })
-      }
-
       const ext = extensionFromMimeType(req.file.mimetype) || "bin"
       const path = `${tenantId}/products/${id}/${uuidv4()}.${ext}`
-      const uploaded = await uploadFileToSupabase({
-        supabase,
-        bucket,
+      const uploaded = await uploadFileLocally({
         path,
         file: req.file,
         upsert: false,
@@ -385,6 +364,50 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
   }
 })
 
+router.get("/tenant/:tenantId/products/:id/flavors", authMiddleware, async (req, res) => {
+  try {
+    const { tenantId } = req.params
+    const id = parseIntOrNull(req.params.id)
+    const allowed = (req.authRole === "waiter" && req.tenantId === tenantId) || await assertTenantOwner({ tenantId, userId: req.userId })
+    if (!allowed) return res.status(403).json({ error: "Acesso negado ao tenant" })
+    const flavors = await prisma.productFlavor.findMany({ where: { productId: id, product: { tenantId } }, orderBy: [{ active: "desc" }, { name: "asc" }] })
+    return res.json(flavors)
+  } catch (error) { console.error(error); return res.status(500).json({ error: "Erro ao listar sabores" }) }
+})
+
+router.post("/tenant/:tenantId/products/:id/flavors", authMiddleware, async (req, res) => {
+  try {
+    const { tenantId } = req.params
+    const productId = parseIntOrNull(req.params.id)
+    if (!(await assertTenantOwner({ tenantId, userId: req.userId }))) return res.status(403).json({ error: "Acesso negado ao tenant" })
+    const product = await prisma.product.findFirst({ where: { id: productId, tenantId }, select: { id: true } })
+    if (!product) return res.status(404).json({ error: "Produto não encontrado" })
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : ""
+    const price = parsePriceToPrismaDecimalString(req.body?.price)
+    if (!name || !price) return res.status(400).json({ error: "Nome e preço do sabor são obrigatórios" })
+    const flavor = await prisma.productFlavor.create({ data: { productId, name, price, active: req.body?.active !== false } })
+    return res.status(201).json(flavor)
+  } catch (error) {
+    if (error?.code === "P2002") return res.status(409).json({ error: "Este sabor já está cadastrado" })
+    console.error(error); return res.status(500).json({ error: "Erro ao cadastrar sabor" })
+  }
+})
+
+router.put("/tenant/:tenantId/products/:productId/flavors/:id", authMiddleware, async (req, res) => {
+  try {
+    const { tenantId } = req.params
+    const id = parseIntOrNull(req.params.id)
+    const productId = parseIntOrNull(req.params.productId)
+    if (!(await assertTenantOwner({ tenantId, userId: req.userId }))) return res.status(403).json({ error: "Acesso negado ao tenant" })
+    const existing = await prisma.productFlavor.findFirst({ where: { id, productId, product: { tenantId } } })
+    if (!existing) return res.status(404).json({ error: "Sabor não encontrado" })
+    const price = typeof req.body?.price !== "undefined" ? parsePriceToPrismaDecimalString(req.body.price) : undefined
+    if (typeof req.body?.price !== "undefined" && !price) return res.status(400).json({ error: "Preço inválido" })
+    const flavor = await prisma.productFlavor.update({ where: { id }, data: { name: typeof req.body?.name === "string" ? req.body.name.trim() : undefined, price, active: typeof req.body?.active === "boolean" ? req.body.active : undefined } })
+    return res.json(flavor)
+  } catch (error) { console.error(error); return res.status(500).json({ error: "Erro ao atualizar sabor" }) }
+})
+
 // rota para excluir um produto do tenant (food truck) do usuário autenticado do tenant (food truck)
 router.delete("/tenant/:tenantId/products/:id", authMiddleware, async (req, res) => {
   try {
@@ -398,7 +421,23 @@ router.delete("/tenant/:tenantId/products/:id", authMiddleware, async (req, res)
     const existing = await prisma.product.findFirst({ where: { id, tenantId } })
     if (!existing) return res.status(404).json({ error: "Produto não encontrado" })
 
-    await prisma.product.delete({ where: { id } })
+    await prisma.$transaction(async (tx) => {
+      const orderItemCount = await tx.orderItem.count({ where: { productId: id } })
+
+      // Produtos que já fazem parte do histórico de pedidos não podem ser
+      // removidos fisicamente sem corromper esse histórico. Para o catálogo,
+      // desativar produz o mesmo efeito de exclusão.
+      if (orderItemCount > 0) {
+        await tx.product.update({ where: { id }, data: { active: false } })
+        return
+      }
+
+      await tx.option.deleteMany({
+        where: { group: { productId: id } },
+      })
+      await tx.optionGroup.deleteMany({ where: { productId: id } })
+      await tx.product.delete({ where: { id } })
+    })
     return res.status(204).json({})
   } catch (error) {
     console.error(error)

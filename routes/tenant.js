@@ -1,9 +1,10 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
-import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import authMiddleware from '../middlewares/auth.js';
+import { removeLocalUploads, saveLocalUpload } from '../utils/localUploads.js';
+import { getBusinessOpeningStatus } from '../utils/openingHours.js';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -12,16 +13,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 60 * 1024 * 1024 },
 });
-
-function getSupabaseClient() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) return null;
-
-  return createClient(url, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
-}
 
 function toSafePathSegment(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
@@ -39,23 +30,8 @@ function extensionFromMimeType(mimeType) {
   return null;
 }
 
-async function uploadFileToSupabase({ supabase, bucket, path, file, upsert }) {
-  const { error } = await supabase.storage.from(bucket).upload(path, file.buffer, {
-    contentType: file.mimetype,
-    upsert: Boolean(upsert),
-  });
-
-  if (error) {
-    throw new Error(error.message || 'Falha ao enviar arquivo para o Supabase Storage');
-  }
-
-  const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(path);
-  const publicUrl = publicUrlResult?.data?.publicUrl;
-  if (!publicUrl) {
-    throw new Error('Falha ao gerar URL pública do arquivo enviado');
-  }
-
-  return { publicUrl, path };
+async function uploadFileLocally({ path, file }) {
+  return saveLocalUpload({ relativePath: path, buffer: file.buffer });
 }
 
 function isTimeString(value) {
@@ -79,6 +55,50 @@ function parsePriceToDecimalString(value) {
   return parsed.toFixed(2);
 }
 
+function defaultTenantSettings() {
+  return {
+    acceptOrdersAutomatically: false,
+    maxOrderMinutes: 30,
+    prepTimes: {
+      localMinutes: 10,
+      pickupMinutes: 15,
+      deliveryMinutes: 30,
+    },
+    sounds: {
+      newOrder: '',
+      ready: '',
+    },
+    colors: {
+      orders: {
+        analysis: '#ffffff',
+        production: '#ffffff',
+        ready: '#ffffff',
+      },
+      kds: {
+        analysis: '#ffffff',
+        production: '#ffffff',
+        ready: '#ffffff',
+      },
+    },
+  };
+}
+
+function parseTenantSettingsInput(value) {
+  if (typeof value === 'undefined') return { ok: true, value: null };
+  if (value === null) return { ok: true, value: null };
+  if (typeof value === 'object') return { ok: true, value };
+  if (typeof value !== 'string') return { ok: false, error: 'settings inválido' };
+  const trimmed = value.trim();
+  if (!trimmed) return { ok: true, value: null };
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, error: 'settings deve ser um objeto JSON' };
+    return { ok: true, value: parsed };
+  } catch {
+    return { ok: false, error: 'settings inválido' };
+  }
+}
+
 function isMissingTenantColumn(err, columnName) {
   if (!err || typeof err !== 'object') return false;
   const code = 'code' in err ? err.code : null;
@@ -96,7 +116,7 @@ function isMissingTenantColumn(err, columnName) {
   return false;
 }
 
-function tenantSelect({ includeDeliveryFee, includePublicRelations }) {
+function tenantSelect({ includeDeliveryFee, includeSettings, includePublicRelations }) {
   const base = {
     id: true,
     name: true,
@@ -104,6 +124,7 @@ function tenantSelect({ includeDeliveryFee, includePublicRelations }) {
     logoUrl: true,
     phone: true,
     ...(includeDeliveryFee ? { deliveryFee: true } : {}),
+    ...(includeSettings ? { settings: true } : {}),
     ownerId: true,
     active: true,
     createdAt: true,
@@ -233,7 +254,7 @@ router.get('/public/tenant/:slug', async (req, res) => {
         },
       });
     } catch (err) {
-      if (!isMissingTenantColumn(err, 'deliveryFee')) throw err;
+      if (!isMissingTenantColumn(err, 'deliveryFee') && !isMissingTenantColumn(err, 'settings')) throw err;
       baseTenant = await prisma.tenant.findFirst({
         where: { slug: normalizedSlug, active: true },
         select: {
@@ -267,6 +288,7 @@ router.get('/public/tenant/:slug', async (req, res) => {
               where: { active: true },
               orderBy: [{ seq: 'asc' }, { id: 'asc' }],
               include: {
+                flavors: { where: { active: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] },
                 optionGroups: {
                   orderBy: [{ id: 'asc' }],
                   include: { options: true },
@@ -283,6 +305,7 @@ router.get('/public/tenant/:slug', async (req, res) => {
       deliveryFee: typeof baseTenant.deliveryFee === 'undefined' ? '0.00' : baseTenant.deliveryFee,
       media,
       openingHours,
+      openingStatus: getBusinessOpeningStatus(openingHours),
       paymentMethods,
       categories,
     });
@@ -461,18 +484,17 @@ router.post('/tenant/:id/delivery-men', authMiddleware, upload.single('avatar'),
     const address = typeof req.body?.address === 'string' ? req.body.address.trim() : '';
     const plateVehicle = typeof req.body?.plateVehicle === 'string' ? req.body.plateVehicle.trim() : '';
     const modelvehicle = typeof req.body?.modelvehicle === 'string' ? req.body.modelvehicle.trim() : '';
+    const typeVehicle = typeof req.body?.typeVehicle === 'string' ? req.body.typeVehicle.trim() : '';
 
     if (!name || !phone || !address || !plateVehicle || !modelvehicle) {
       return res.status(400).json({ error: 'Campos obrigatórios: name, phone, address, plateVehicle, modelvehicle' });
     }
 
-    const avatarFile = req.file;
-    const supabase = getSupabaseClient();
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'tenants';
-    if (avatarFile && !supabase) {
-      return res.status(500).json({ error: 'Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+    if (typeVehicle && typeVehicle !== 'Moto' && typeVehicle !== 'Carro') {
+      return res.status(400).json({ error: 'typeVehicle inválido' });
     }
 
+    const avatarFile = req.file;
     const created = await prisma.deliveryMen.create({
       data: {
         tenantId,
@@ -482,6 +504,7 @@ router.post('/tenant/:id/delivery-men', authMiddleware, upload.single('avatar'),
         address,
         plateVehicle,
         modelvehicle,
+        typeVehicle: typeVehicle || null,
       },
     });
 
@@ -491,9 +514,7 @@ router.post('/tenant/:id/delivery-men', authMiddleware, upload.single('avatar'),
       }
       const ext = extensionFromMimeType(avatarFile.mimetype) || 'bin';
       const avatarPath = `${tenantId}/delivery-men/${created.id}/avatar-${uuidv4()}.${ext}`;
-      const uploadedAvatar = await uploadFileToSupabase({
-        supabase,
-        bucket,
+      const uploadedAvatar = await uploadFileLocally({
         path: avatarPath,
         file: avatarFile,
         upsert: false,
@@ -531,14 +552,13 @@ router.put('/tenant/:tenantId/delivery-men/:id', authMiddleware, upload.single('
     if (typeof req.body?.address === 'string') data.address = req.body.address.trim();
     if (typeof req.body?.plateVehicle === 'string') data.plateVehicle = req.body.plateVehicle.trim();
     if (typeof req.body?.modelvehicle === 'string') data.modelvehicle = req.body.modelvehicle.trim();
-
-    const avatarFile = req.file;
-    const supabase = getSupabaseClient();
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'tenants';
-    if (avatarFile && !supabase) {
-      return res.status(500).json({ error: 'Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+    if (typeof req.body?.typeVehicle === 'string') {
+      const typeVehicle = req.body.typeVehicle.trim();
+      if (typeVehicle && typeVehicle !== 'Moto' && typeVehicle !== 'Carro') return res.status(400).json({ error: 'typeVehicle inválido' });
+      data.typeVehicle = typeVehicle || null;
     }
 
+    const avatarFile = req.file;
     let avatarUrl = null;
     if (avatarFile) {
       if (!avatarFile.mimetype?.startsWith('image/')) {
@@ -546,9 +566,7 @@ router.put('/tenant/:tenantId/delivery-men/:id', authMiddleware, upload.single('
       }
       const ext = extensionFromMimeType(avatarFile.mimetype) || 'bin';
       const avatarPath = `${tenantId}/delivery-men/${id}/avatar-${uuidv4()}.${ext}`;
-      const uploadedAvatar = await uploadFileToSupabase({
-        supabase,
-        bucket,
+      const uploadedAvatar = await uploadFileLocally({
         path: avatarPath,
         file: avatarFile,
         upsert: false,
@@ -691,14 +709,14 @@ router.get('/tenants', authMiddleware, async (req, res) => {
       tenants = await prisma.tenant.findMany({
         where: { ownerId: req.userId },
         orderBy: { createdAt: 'desc' },
-        select: tenantSelect({ includeDeliveryFee: true, includePublicRelations: false }),
+        select: tenantSelect({ includeDeliveryFee: true, includeSettings: true, includePublicRelations: false }),
       });
     } catch (err) {
-      if (!isMissingTenantColumn(err, 'deliveryFee')) throw err;
+      if (!isMissingTenantColumn(err, 'deliveryFee') && !isMissingTenantColumn(err, 'settings')) throw err;
       tenants = await prisma.tenant.findMany({
         where: { ownerId: req.userId },
         orderBy: { createdAt: 'desc' },
-        select: tenantSelect({ includeDeliveryFee: false, includePublicRelations: false }),
+        select: tenantSelect({ includeDeliveryFee: false, includeSettings: false, includePublicRelations: false }),
       });
     }
 
@@ -717,14 +735,14 @@ router.get('/tenant/me', authMiddleware, async (req, res) => {
       tenant = await prisma.tenant.findFirst({
         where: { ownerId: req.userId },
         orderBy: { createdAt: 'desc' },
-        select: tenantSelect({ includeDeliveryFee: true, includePublicRelations: false }),
+        select: tenantSelect({ includeDeliveryFee: true, includeSettings: true, includePublicRelations: false }),
       });
     } catch (err) {
-      if (!isMissingTenantColumn(err, 'deliveryFee')) throw err;
+      if (!isMissingTenantColumn(err, 'deliveryFee') && !isMissingTenantColumn(err, 'settings')) throw err;
       tenant = await prisma.tenant.findFirst({
         where: { ownerId: req.userId },
         orderBy: { createdAt: 'desc' },
-        select: tenantSelect({ includeDeliveryFee: false, includePublicRelations: false }),
+        select: tenantSelect({ includeDeliveryFee: false, includeSettings: false, includePublicRelations: false }),
       });
     }
 
@@ -748,13 +766,13 @@ router.get('/tenant/:id', authMiddleware, async (req, res) => {
     try {
       tenant = await prisma.tenant.findFirst({
         where: { id, ownerId: req.userId },
-        select: tenantSelect({ includeDeliveryFee: true, includePublicRelations: false }),
+        select: tenantSelect({ includeDeliveryFee: true, includeSettings: true, includePublicRelations: false }),
       });
     } catch (err) {
       if (!isMissingTenantColumn(err, 'deliveryFee')) throw err;
       tenant = await prisma.tenant.findFirst({
         where: { id, ownerId: req.userId },
-        select: tenantSelect({ includeDeliveryFee: false, includePublicRelations: false }),
+        select: tenantSelect({ includeDeliveryFee: false, includeSettings: false, includePublicRelations: false }),
       });
     }
 
@@ -778,11 +796,13 @@ router.post(
   ]),
   async (req, res) => {
   try {
-    const { name, slug, phone, userId, logoUrl, deliveryFee } = req.body;
+    const { name, slug, phone, userId, logoUrl, deliveryFee, settings } = req.body;
     const parsedUserId = Number(userId);
     const normalizedLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
     const parsedDeliveryFee = typeof deliveryFee === 'undefined' ? null : parsePriceToDecimalString(deliveryFee);
     if (typeof deliveryFee !== 'undefined' && parsedDeliveryFee === null) return res.status(400).json({ error: 'deliveryFee inválido' });
+    const parsedSettings = parseTenantSettingsInput(settings);
+    if (!parsedSettings.ok) return res.status(400).json({ error: parsedSettings.error });
     const rawSlug = typeof slug === 'string' ? slug.trim() : '';
     const baseSlug = toSafePathSegment(rawSlug || name);
     const slugWasProvided = Boolean(rawSlug);
@@ -796,6 +816,7 @@ router.post(
     if (slugWasProvided) {
       const slugExists = await prisma.tenant.findUnique({
         where: { slug: resolvedSlug },
+        select: { id: true },
       });
       if (slugExists) {
         return res.status(400).json({ error: 'Já existe um food truck com esse slug' });
@@ -804,6 +825,7 @@ router.post(
       for (let i = 0; i < 50; i += 1) {
         const slugExists = await prisma.tenant.findUnique({
           where: { slug: resolvedSlug },
+          select: { id: true },
         });
         if (!slugExists) break;
         resolvedSlug = `${baseSlug}-${i + 2}`;
@@ -811,6 +833,7 @@ router.post(
 
       const slugExists = await prisma.tenant.findUnique({
         where: { slug: resolvedSlug },
+        select: { id: true },
       });
       if (slugExists) {
         return res.status(500).json({ error: 'Falha ao gerar slug único' });
@@ -826,13 +849,6 @@ router.post(
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    const supabase = getSupabaseClient();
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'tenants';
-    const hasAnyFiles = Boolean(req.files?.logo?.length || req.files?.media?.length);
-    if (hasAnyFiles && !supabase) {
-      return res.status(500).json({ error: 'Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
-    }
-
     let createdTenant;
     try {
       createdTenant = await prisma.tenant.create({
@@ -842,18 +858,20 @@ router.post(
           logoUrl: typeof normalizedLogoUrl === 'string' ? (normalizedLogoUrl ? normalizedLogoUrl : null) : undefined,
           phone,
           deliveryFee: parsedDeliveryFee ?? '0.00',
+          settings: parsedSettings.value ?? defaultTenantSettings(),
           ownerId: parsedUserId,
           active: true,
         },
       });
     } catch (err) {
-      if (!isMissingTenantColumn(err, 'deliveryFee')) throw err;
+      if (!isMissingTenantColumn(err, 'deliveryFee') && !isMissingTenantColumn(err, 'settings')) throw err;
       createdTenant = await prisma.tenant.create({
         data: {
           name,
           slug: resolvedSlug,
           logoUrl: typeof normalizedLogoUrl === 'string' ? (normalizedLogoUrl ? normalizedLogoUrl : null) : undefined,
           phone,
+          ...(isMissingTenantColumn(err, 'deliveryFee') ? {} : { deliveryFee: parsedDeliveryFee ?? '0.00' }),
           ownerId: parsedUserId,
           active: true,
         },
@@ -872,9 +890,7 @@ router.post(
 
         const ext = extensionFromMimeType(logoFile.mimetype) || 'bin';
         const logoPath = `${safeSlug}/${createdTenant.id}/logo.${ext}`;
-        const uploadedLogo = await uploadFileToSupabase({
-          supabase,
-          bucket,
+        const uploadedLogo = await uploadFileLocally({
           path: logoPath,
           file: logoFile,
           upsert: true,
@@ -900,9 +916,7 @@ router.post(
 
           const ext = extensionFromMimeType(file.mimetype) || 'bin';
           const mediaPath = `${safeSlug}/${createdTenant.id}/media/${uuidv4()}.${ext}`;
-          const uploadedMedia = await uploadFileToSupabase({
-            supabase,
-            bucket,
+          const uploadedMedia = await uploadFileLocally({
             path: mediaPath,
             file,
             upsert: false,
@@ -922,16 +936,22 @@ router.post(
         }
       }
 
-      const tenantWithMedia = await prisma.tenant.findUnique({
-        where: { id: createdTenant.id },
-        include: { media: true },
-      });
+      let tenantWithMedia;
+      try {
+        tenantWithMedia = await prisma.tenant.findUnique({
+          where: { id: createdTenant.id },
+          include: { media: true },
+        });
+      } catch (err) {
+        if (!isMissingTenantColumn(err, 'deliveryFee') && !isMissingTenantColumn(err, 'settings')) throw err;
+        tenantWithMedia = createdTenant;
+      }
 
       return res.status(201).json(tenantWithMedia);
     } catch (uploadError) {
-      if (supabase && uploadedPaths.length) {
+      if (uploadedPaths.length) {
         try {
-          await supabase.storage.from(bucket).remove(uploadedPaths);
+          await removeLocalUploads(uploadedPaths);
         } catch {
           void 0;
         }
@@ -962,11 +982,13 @@ router.put(
   async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, phone, active, logoUrl, deliveryFee } = req.body;
+    const { name, slug, phone, active, logoUrl, deliveryFee, settings } = req.body;
     const parsedActive = active === 'true' ? true : active === 'false' ? false : undefined;
     const normalizedLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
     const parsedDeliveryFee = typeof deliveryFee === 'undefined' ? null : parsePriceToDecimalString(deliveryFee);
     if (typeof deliveryFee !== 'undefined' && parsedDeliveryFee === null) return res.status(400).json({ error: 'deliveryFee inválido' });
+    const parsedSettings = parseTenantSettingsInput(settings);
+    if (!parsedSettings.ok) return res.status(400).json({ error: parsedSettings.error });
 
     // validação básica
     if (!name || !slug) {
@@ -976,6 +998,7 @@ router.put(
     // verifica se o tenant existe
     const tenantExists = await prisma.tenant.findUnique({
       where: { id },
+      select: { id: true, ownerId: true, slug: true, active: true },
     });
 
     if (!tenantExists) {
@@ -990,17 +1013,11 @@ router.put(
     if (slug !== tenantExists.slug) {
       const slugExists = await prisma.tenant.findUnique({
         where: { slug },
+        select: { id: true },
       });
       if (slugExists) {
         return res.status(400).json({ error: 'Já existe um food truck com esse slug' });
       }
-    }
-
-    const supabase = getSupabaseClient();
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'tenants';
-    const hasAnyFiles = Boolean(req.files?.logo?.length || req.files?.media?.length);
-    if (hasAnyFiles && !supabase) {
-      return res.status(500).json({ error: 'Supabase não configurado para upload (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
     }
 
     const safeSlug = toSafePathSegment(slug);
@@ -1017,10 +1034,11 @@ router.put(
           phone,
           active: typeof parsedActive === 'boolean' ? parsedActive : tenantExists.active,
           ...(parsedDeliveryFee !== null ? { deliveryFee: parsedDeliveryFee } : {}),
+          ...(typeof settings !== 'undefined' ? { settings: parsedSettings.value } : {}),
         },
       });
     } catch (err) {
-      if (!isMissingTenantColumn(err, 'deliveryFee')) throw err;
+      if (!isMissingTenantColumn(err, 'deliveryFee') && !isMissingTenantColumn(err, 'settings')) throw err;
       updatedTenant = await prisma.tenant.update({
         where: { id },
         data: {
@@ -1029,6 +1047,7 @@ router.put(
           logoUrl: typeof normalizedLogoUrl === 'string' ? (normalizedLogoUrl ? normalizedLogoUrl : null) : undefined,
           phone,
           active: typeof parsedActive === 'boolean' ? parsedActive : tenantExists.active,
+          ...(isMissingTenantColumn(err, 'deliveryFee') ? {} : parsedDeliveryFee !== null ? { deliveryFee: parsedDeliveryFee } : {}),
         },
       });
     }
@@ -1042,9 +1061,7 @@ router.put(
 
         const ext = extensionFromMimeType(logoFile.mimetype) || 'bin';
         const logoPath = `${safeSlug}/${updatedTenant.id}/logo.${ext}`;
-        const uploadedLogo = await uploadFileToSupabase({
-          supabase,
-          bucket,
+        const uploadedLogo = await uploadFileLocally({
           path: logoPath,
           file: logoFile,
           upsert: true,
@@ -1070,9 +1087,7 @@ router.put(
 
           const ext = extensionFromMimeType(file.mimetype) || 'bin';
           const mediaPath = `${safeSlug}/${updatedTenant.id}/media/${uuidv4()}.${ext}`;
-          const uploadedMedia = await uploadFileToSupabase({
-            supabase,
-            bucket,
+          const uploadedMedia = await uploadFileLocally({
             path: mediaPath,
             file,
             upsert: false,
@@ -1092,16 +1107,22 @@ router.put(
         }
       }
 
-      const tenantWithMedia = await prisma.tenant.findUnique({
-        where: { id: updatedTenant.id },
-        include: { media: true },
-      });
+      let tenantWithMedia;
+      try {
+        tenantWithMedia = await prisma.tenant.findUnique({
+          where: { id: updatedTenant.id },
+          include: { media: true },
+        });
+      } catch (err) {
+        if (!isMissingTenantColumn(err, 'deliveryFee') && !isMissingTenantColumn(err, 'settings')) throw err;
+        tenantWithMedia = updatedTenant;
+      }
 
       return res.status(200).json(tenantWithMedia);
     } catch (uploadError) {
-      if (supabase && uploadedPaths.length) {
+      if (uploadedPaths.length) {
         try {
-          await supabase.storage.from(bucket).remove(uploadedPaths);
+          await removeLocalUploads(uploadedPaths);
         } catch {
           void 0;
         }

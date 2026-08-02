@@ -1,0 +1,4 @@
+ALTER TABLE "Order"
+ADD COLUMN "discountAmount" DECIMAL(10,2) NOT NULL DEFAULT 0,
+ADD COLUMN "waiterCommissionPercent" DECIMAL(5,2) NOT NULL DEFAULT 0,
+ADD COLUMN "waiterCommissionAmount" DECIMAL(10,2) NOT NULL DEFAULT 0;

@@ -4,4 +4,7 @@ node_modules
 frontend
 chefito_frontend
 .DS_Store
+public/uploads/*
+!public/uploads/.gitkeep
 frontend_projeto_curso
+frontend-chefito

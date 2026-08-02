@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import slugify from 'slugify';
+import { uploadsRoot } from './utils/localUploads.js';
 
 const app = express();
 
@@ -15,6 +16,9 @@ import productRoutes from './routes/product.js';
 import categoryRoutes from './routes/category.js';
 import orderRoutes from './routes/order.js';
 import optionsRoutes from './routes/options.js';
+import mediaLibraryRoutes from './routes/mediaLibrary.js';
+import waiterRoutes from './routes/waiter.js';
+import reportRoutes from './routes/report.js';
 
 
 
@@ -28,6 +32,7 @@ app.use(cors({
 
 // configuração do servidor com express.json
 app.use(express.json());
+app.use('/uploads', express.static(uploadsRoot));
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', tenantRoutes);
@@ -36,6 +41,9 @@ app.use('/api', productRoutes);
 app.use('/api', categoryRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', optionsRoutes);
+app.use('/api', mediaLibraryRoutes);
+app.use('/api', waiterRoutes);
+app.use('/api', reportRoutes);
 
 
 // configuração da porta do servidor
