@@ -7,7 +7,12 @@ const center = (value) => {
   const text = clean(value).slice(0, width)
   return `${' '.repeat(Math.max(0, Math.floor((width - text.length) / 2)))}${text}`
 }
-const destination = (order) => order?.table?.number ? `MESA ${order.table.number}` : clean(order?.customerName) || (order?.type === 'delivery' ? 'DELIVERY' : 'BALCAO')
+const destination = (order) => {
+  if (order?.table?.number) return `MESA ${order.table.number}`
+  const customer = clean(order?.customerName)
+  if (order?.type === 'delivery') return customer ? `DELIVERY - ${customer}` : 'DELIVERY'
+  return customer || (order?.type === 'pickup' ? 'RETIRADA' : 'BALCAO')
+}
 
 function itemLines(item) {
   const lines = [`${item.quantity || 1}x ${clean(item?.product?.name || 'Produto')}`]
@@ -20,8 +25,10 @@ function itemLines(item) {
 
 export function buildReceipt(order, items, { addition = false } = {}) {
   const createdAt = new Date(order.createdAt || Date.now()).toLocaleString('pt-BR')
+  const companyName = clean(order?.tenant?.name) || 'EMPRESA'
   const output = [
-    center('CHEFITO - PRODUCAO'),
+    center(companyName),
+    center('PRODUCAO'),
     center(addition ? '*** COMPLEMENTO ***' : 'NOVO PEDIDO'),
     line('='),
     `PEDIDO #${String(order.id).padStart(4, '0')}`,

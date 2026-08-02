@@ -128,6 +128,7 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
   return {
     id: true,
     tenantId: true,
+    tenant: { select: { name: true } },
     userId: true,
     tableId: true,
     waiterId: true,
