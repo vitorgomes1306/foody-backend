@@ -17,11 +17,28 @@ router.post('/public/tenant/:slug/waiter/login', async (req, res) => {
     if (!tenant) return res.status(404).json({ error: 'Empresa não encontrada' })
     const waiter = await prisma.waiter.findUnique({ where: { tenantId_username: { tenantId: tenant.id, username } } })
     if (!waiter || !waiter.active || !(await bcrypt.compare(password, waiter.password))) return res.status(401).json({ error: 'Usuário ou senha inválidos' })
-    const token = jwt.sign({ waiterId: waiter.id, tenantId: tenant.id, role: 'waiter' }, process.env.JWT_SECRET, { expiresIn: '12h' })
+    const token = jwt.sign({ waiterId: waiter.id, tenantId: tenant.id, role: 'waiter' }, process.env.JWT_SECRET, { expiresIn: '100d' })
     return res.json({ token, tenant, waiter: { id: waiter.id, name: waiter.name, username: waiter.username } })
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'Erro ao entrar como garçom' })
+  }
+})
+
+router.post('/public/tenant/:slug/waiter/session', authMiddleware, async (req, res) => {
+  try {
+    if (req.authRole !== 'waiter' || !req.waiterId || !req.tenantId) return res.status(403).json({ error: 'Sessão de garçom inválida' })
+    const tenant = await prisma.tenant.findFirst({
+      where: { id: req.tenantId, slug: req.params.slug.trim().toLowerCase(), active: true }, select: { id: true, name: true, slug: true },
+    })
+    if (!tenant) return res.status(401).json({ error: 'Empresa indisponível' })
+    const waiter = await prisma.waiter.findFirst({ where: { id: req.waiterId, tenantId: tenant.id, active: true } })
+    if (!waiter) return res.status(401).json({ error: 'Garçom inativo ou não encontrado' })
+    const token = jwt.sign({ waiterId: waiter.id, tenantId: tenant.id, role: 'waiter' }, process.env.JWT_SECRET, { expiresIn: '100d' })
+    return res.json({ token, tenant, waiter: { id: waiter.id, name: waiter.name, username: waiter.username } })
+  } catch (error) {
+    console.error('Erro ao renovar sessão do garçom:', error)
+    return res.status(500).json({ error: 'Erro ao renovar sessão do garçom' })
   }
 })
 
