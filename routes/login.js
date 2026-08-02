@@ -39,6 +39,11 @@ router.post('/login', async (req, res) => {
         // remove senha da resposta
         const { password: _, ...userWithoutPassword } = user;
 
+        if (!process.env.JWT_SECRET) {
+            console.error('JWT_SECRET não está configurado no ambiente');
+            return res.status(503).json({ error: 'Configuração de autenticação indisponível' });
+        }
+
         // gera token JWT
         const token = jwt.sign(
             { userId: user.id },

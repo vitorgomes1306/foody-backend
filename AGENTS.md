@@ -1,28 +1,17 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-02 7:20am GMT-3
+# [foody] recent context, 2026-08-02 9:42am GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,287t read) | 451,249t work | 96% savings
+Stats: 50 obs (19,548t read) | 506,708t work | 96% savings
 
 ### Aug 1, 2026
 S295 Fix Supabase image uploads in the foody/chefito project — credentials were empty, then the configured project was found to be unreachable (DNS ENOTFOUND). User now wants to switch to a different Supabase project. (Aug 1 at 1:25 PM)
 S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase project DNS unreachable), user wants to switch to a different/working Supabase project (Aug 1 at 1:25 PM)
-1703 10:36p 🟣 Flavor Picker Modal Added to CounterOrdersPage.jsx via Full-Line Replacement
-1704 " 🟣 Public Menu (App.jsx) Options Modal Updated for Flavor Selection
-1705 10:37p 🟣 Migration 20260801233000_add_product_flavors Applied to Production Database
-1706 " 🟣 Order Item Flavor Display Added to App.jsx and OrdersBoard.jsx
-1707 " ✅ Backend Server Stopped for Restart After Flavor Feature Patches
-1709 " 🔵 Counter POS Option Groups Integration Patch Failed — Line 109 Whitespace Mismatch
-1710 " 🟣 Counter POS Option Groups Integration Completed — Cart Now Includes Options Pricing
-1708 10:38p ✅ Backend Server Restarted with Complete Flavor Feature — Running on Port 3001
-1711 10:39p 🟣 CounterProductConfigurator Component Created — Unified Flavor+Options Modal for Counter POS
-1712 " 🔄 CounterOrdersPage Inline Flavor Modal Replaced with CounterProductConfigurator
-1713 " ✅ Final Validation Pass — All Checks Clean After Complete Flavor+Options Feature
 1714 10:40p 🔵 App.jsx allowFraction Section Already Replaced — Patch Anchor No Longer Exists
 1715 " 🟣 usesFlavors and allowFraction Are Now Mutually Exclusive — Auto-Clear on Server
 1716 " 🔵 npx prisma migrate status Always Fails from exec_command Due to Network Isolation
@@ -63,6 +52,17 @@ S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase 
 1751 " 🟣 Backend `todayOrders` Raw Array Exposed in Sales Report API
 1752 " 🔵 OrdersBoard Card Model Missing `waiterId` — Needed for Ready Column Source Filter
 1753 6:54a 🟣 Source Filter Tabs in "Prontos para entrega" Column — OrdersBoard
+1754 7:20a 🔵 Vercel Frontend 404 on Login — API URL Configuration Issue
+1755 7:21a 🔵 Root Cause of Vercel 404: Wrong Env Var Name + All-Relative API URLs
+1756 " 🔴 Vercel→Railway API Routing Fixed via Fetch Monkey-Patch + apiBase Module
+1758 " 🔵 Production 500 on User Registration — Prisma Binary Target Mismatch on Railway (Linux)
+1759 " 🔵 Railway DATABASE_URL Not Set — Prisma Cannot Connect
+1757 7:22a 🔵 Vercel Fix Verified in Build — Railway URL Baked into Bundle
+1760 9:30a 🔵 Railway DATABASE_URL Must Be Added as Reference Variable via UI
+1761 9:38a 🔵 Database Connected But Registration Still 500 — Likely Missing Migrations
+1762 " 🔵 Railway Database Now Connected — /test/database Returns 200
+1763 " 🔵 Login Returns 500 — Prisma Tables Missing, Migrations Never Deployed
+1764 9:39a 🔵 34 Prisma Migrations Never Applied to Railway — Full Schema History
 
-Access 451k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 507k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
