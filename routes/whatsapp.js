@@ -227,6 +227,14 @@ function chatActivityAt(chat) {
   return evolutionTimestamp(chat?.updatedAt || chat?.lastMessage?.messageTimestamp || chat?.lastMessage?.timestamp || chat?.messageTimestamp)
 }
 
+function canonicalChatJid(chat) {
+  return String(chat?.remoteJidAlt || chat?.lastMessage?.key?.remoteJidAlt || chat?.lastMessage?.contextInfo?.participant || chat?.remoteJid || chat?.id || '').trim()
+}
+
+function chatLastMessageFromMe(chat) {
+  return Boolean(chat?.lastMessage?.key?.fromMe ?? chat?.lastMessage?.fromMe)
+}
+
 function messageActivityAt(message) {
   return evolutionTimestamp(message?.messageTimestamp || message?.timestamp || message?.createdAt || message?.updatedAt)
 }
@@ -243,14 +251,51 @@ router.get('/tenant/:tenantId/whatsapp-messaging/chats', authMiddleware, async (
     })
     const allChats = Array.isArray(chats) ? chats : chats?.records || chats?.chats || []
     const startedAt = channel.messagingStartedAt || channel.updatedAt
+    const archivedStates = await prisma.whatsAppConversationState.findMany({
+      where: { tenantId, provider: channel.provider, archivedAt: { not: null } },
+      select: { contactJid: true, archivedAt: true },
+    })
+    const archivedByContact = new Map(archivedStates.map((state) => [state.contactJid, state.archivedAt]))
+    const reopenedContacts = new Set()
     const visibleChats = startedAt ? allChats.filter((chat) => {
       const activityAt = chatActivityAt(chat)
-      return activityAt && activityAt >= startedAt
+      if (!activityAt || activityAt < startedAt) return false
+      const contactJid = canonicalChatJid(chat)
+      const archivedAt = archivedByContact.get(contactJid)
+      if (!archivedAt) return true
+      const reopened = !chatLastMessageFromMe(chat) && activityAt > archivedAt
+      if (reopened) reopenedContacts.add(contactJid)
+      return reopened
     }) : []
+    if (reopenedContacts.size) {
+      await prisma.whatsAppConversationState.updateMany({
+        where: { tenantId, provider: channel.provider, contactJid: { in: [...reopenedContacts] } }, data: { archivedAt: null },
+      })
+    }
     res.json({ provider: channel.provider, instanceName: channel.evolutionInstanceName, startedAt, chats: visibleChats })
   } catch (error) {
     console.error('Erro ao carregar conversas:', error)
     res.status(error.status >= 400 && error.status < 600 ? error.status : 500).json({ error: error.message || 'Erro ao carregar conversas' })
+  }
+})
+
+router.post('/tenant/:tenantId/whatsapp-messaging/chats/archive', authMiddleware, async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId
+    if (!(await ownedTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado à empresa' })
+    const contactJid = String(req.body.contactJid || '').trim()
+    if (!contactJid || contactJid.length > 160) return res.status(400).json({ error: 'Contato inválido' })
+    const channel = await messagingChannel(tenantId)
+    if (!channel) return res.status(409).json({ error: 'Selecione um canal para atendimento' })
+    await prisma.whatsAppConversationState.upsert({
+      where: { tenantId_provider_contactJid: { tenantId, provider: channel.provider, contactJid } },
+      create: { tenantId, provider: channel.provider, contactJid, archivedAt: new Date() },
+      update: { archivedAt: new Date() },
+    })
+    res.json({ archived: true, contactJid })
+  } catch (error) {
+    console.error('Erro ao arquivar conversa:', error)
+    res.status(500).json({ error: 'Erro ao arquivar conversa' })
   }
 })
 
