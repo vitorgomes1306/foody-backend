@@ -259,16 +259,19 @@ router.get('/tenant/:tenantId/whatsapp-messaging/messages', authMiddleware, asyn
     const tenantId = req.params.tenantId
     if (!(await ownedTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado à empresa' })
     const remoteJid = String(req.query.remoteJid || '').trim()
+    const numberJid = String(req.query.numberJid || '').trim()
     if (!remoteJid) return res.status(400).json({ error: 'Conversa não informada' })
     const channel = await messagingChannel(tenantId)
     if (!channel) return res.status(409).json({ error: 'Selecione um canal para atendimento' })
     if (channel.provider !== 'evolution') return res.status(501).json({ error: 'Canal ainda não suportado na caixa de mensagens' })
-    const result = await evolutionRequest(`/chat/findMessages/${encodeURIComponent(channel.evolutionInstanceName)}`, {
-      method: 'POST', body: JSON.stringify({ where: { key: { remoteJid } }, page: 1, offset: 100 }),
-    })
-    const messages = Array.isArray(result) ? result : result?.messages?.records || result?.records || result?.messages || []
+    const jids = [...new Set([remoteJid, numberJid].filter(Boolean))]
+    const results = await Promise.all(jids.map((jid) => evolutionRequest(`/chat/findMessages/${encodeURIComponent(channel.evolutionInstanceName)}`, {
+      method: 'POST', body: JSON.stringify({ where: { key: { remoteJid: jid } }, page: 1, offset: 100 }),
+    })))
+    const messages = results.flatMap((result) => Array.isArray(result) ? result : result?.messages?.records || result?.records || result?.messages || [])
+    const uniqueMessages = [...new Map(messages.map((message, index) => [message?.key?.id || message?.id || `${messageActivityAt(message)?.getTime() || 0}-${index}`, message])).values()]
     const startedAt = channel.messagingStartedAt || channel.updatedAt
-    const visibleMessages = startedAt ? messages.filter((message) => {
+    const visibleMessages = startedAt ? uniqueMessages.filter((message) => {
       const activityAt = messageActivityAt(message)
       return activityAt && activityAt >= startedAt
     }) : []
