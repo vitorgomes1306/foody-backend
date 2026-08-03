@@ -333,6 +333,7 @@ model Order {
   total                        Decimal            @db.Decimal(10, 2)
   deliveryFee                  Decimal            @default(0) @db.Decimal(10, 2)
   deliveryManId                Int?
+  deliveryCancelledAt          DateTime?
   waiterId                     Int?
   paymentMethodType            PaymentMethodType?
   paidAt                       DateTime?

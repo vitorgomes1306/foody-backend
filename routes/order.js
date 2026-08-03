@@ -114,6 +114,7 @@ function isMissingAnyOrderColumns(err) {
     isMissingOrderColumn(err, "statusChangedAt") ||
     isMissingOrderColumn(err, "deliveryFee") ||
     isMissingOrderColumn(err, "deliveryManId") ||
+    isMissingOrderColumn(err, "deliveryCancelledAt") ||
     isMissingOrderColumn(err, "waiterId") ||
     isMissingOrderColumn(err, "paymentMethodType") ||
     isMissingOrderColumn(err, "paidAt") ||
@@ -142,6 +143,7 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
       ? {
           deliveryFee: true,
           deliveryManId: true,
+          deliveryCancelledAt: true,
           deliveryMan: true,
         }
       : {}),
@@ -770,10 +772,23 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
     if (isWaiterRequest) {
       const allowedFields = new Set(["status", "paymentMethodType", "waiterCommissionPercent", "waiterCommissionAddedToTotal"])
       const hasForbiddenField = Object.keys(req.body || {}).some((key) => !allowedFields.has(key))
-      if (hasForbiddenField || req.body?.status !== "delivered" || typeof req.body?.paymentMethodType !== "string") {
+      const isOwnCancellation = req.body?.status === "cancelled" && Object.keys(req.body || {}).every((key) => key === "status")
+      if (hasForbiddenField || (!isOwnCancellation && (req.body?.status !== "delivered" || typeof req.body?.paymentMethodType !== "string"))) {
         return res.status(403).json({ error: "O garçom só pode fechar e receber pedidos próprios" })
       }
-      if (existing.status !== "ready") return res.status(409).json({ error: "O pedido precisa estar pronto para fechar a conta" })
+      if (!isOwnCancellation && existing.status !== "ready") return res.status(409).json({ error: "O pedido precisa estar pronto para fechar a conta" })
+    }
+
+    if (req.body?.cancelDelivery === true) {
+      if (isWaiterRequest) return res.status(403).json({ error: "A entrega só pode ser cancelada pelo atendimento" })
+      if (existing.status !== "out_for_delivery") return res.status(409).json({ error: "O pedido não está em entrega" })
+      const order = await prisma.order.update({
+        where: { id },
+        data: { status: "ready", deliveryManId: null, deliveryCancelledAt: new Date(), statusChangedAt: new Date() },
+        select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }),
+      })
+      void notifyOrderStatusChanged(prisma, order)
+      return res.status(200).json(order)
     }
 
     const data = {}
@@ -836,6 +851,15 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
         if (unfinishedAdditions > 0) {
           return res.status(409).json({ error: "Ainda existem complementos aguardando preparo na cozinha" })
         }
+      }
+      if (status === "cancelled") {
+        if (["delivered", "cancelled", "returned"].includes(existing.status)) {
+          return res.status(409).json({ error: "Este pedido já foi finalizado e não pode ser cancelado" })
+        }
+        if (existing.status === "out_for_delivery") {
+          return res.status(409).json({ error: "Cancele primeiro a entrega e depois cancele o pedido" })
+        }
+        data.deliveryManId = null
       }
       const resolvedType = typeof data.type === "string" ? data.type : existing.type
       if (status === "out_for_delivery" && resolvedType !== "delivery") {
