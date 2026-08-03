@@ -224,7 +224,7 @@ function evolutionTimestamp(value) {
 }
 
 function chatActivityAt(chat) {
-  return evolutionTimestamp(chat?.updatedAt || chat?.lastMessage?.messageTimestamp || chat?.lastMessage?.timestamp || chat?.messageTimestamp)
+  return evolutionTimestamp(chat?.lastMessage?.messageTimestamp || chat?.lastMessage?.timestamp || chat?.messageTimestamp || chat?.updatedAt)
 }
 
 function canonicalChatJid(chat) {
@@ -251,17 +251,17 @@ router.get('/tenant/:tenantId/whatsapp-messaging/chats', authMiddleware, async (
     })
     const allChats = Array.isArray(chats) ? chats : chats?.records || chats?.chats || []
     const startedAt = channel.messagingStartedAt || channel.updatedAt
-    const archivedStates = await prisma.whatsAppConversationState.findMany({
-      where: { tenantId, provider: channel.provider, archivedAt: { not: null } },
-      select: { contactJid: true, archivedAt: true },
+    const conversationStates = await prisma.whatsAppConversationState.findMany({
+      where: { tenantId, provider: channel.provider },
+      select: { contactJid: true, archivedAt: true, readAt: true },
     })
-    const archivedByContact = new Map(archivedStates.map((state) => [state.contactJid, state.archivedAt]))
+    const stateByContact = new Map(conversationStates.map((state) => [state.contactJid, state]))
     const reopenedContacts = new Set()
     const visibleChats = startedAt ? allChats.filter((chat) => {
       const activityAt = chatActivityAt(chat)
       if (!activityAt || activityAt < startedAt) return false
       const contactJid = canonicalChatJid(chat)
-      const archivedAt = archivedByContact.get(contactJid)
+      const archivedAt = stateByContact.get(contactJid)?.archivedAt
       if (!archivedAt) return true
       const reopened = !chatLastMessageFromMe(chat) && activityAt > archivedAt
       if (reopened) reopenedContacts.add(contactJid)
@@ -272,7 +272,14 @@ router.get('/tenant/:tenantId/whatsapp-messaging/chats', authMiddleware, async (
         where: { tenantId, provider: channel.provider, contactJid: { in: [...reopenedContacts] } }, data: { archivedAt: null },
       })
     }
-    res.json({ provider: channel.provider, instanceName: channel.evolutionInstanceName, startedAt, chats: visibleChats })
+    const chatsWithLocalReadState = visibleChats.map((chat) => {
+      const activityAt = chatActivityAt(chat)
+      const readAt = stateByContact.get(canonicalChatJid(chat))?.readAt
+      if (chatLastMessageFromMe(chat)) return { ...chat, unreadMessages: 0, unreadCount: 0 }
+      if (!readAt || !activityAt || activityAt > readAt) return chat
+      return { ...chat, unreadMessages: 0, unreadCount: 0 }
+    })
+    res.json({ provider: channel.provider, instanceName: channel.evolutionInstanceName, startedAt, chats: chatsWithLocalReadState })
   } catch (error) {
     console.error('Erro ao carregar conversas:', error)
     res.status(error.status >= 400 && error.status < 600 ? error.status : 500).json({ error: error.message || 'Erro ao carregar conversas' })
@@ -304,15 +311,25 @@ router.post('/tenant/:tenantId/whatsapp-messaging/chats/read', authMiddleware, a
     const tenantId = req.params.tenantId
     if (!(await ownedTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado à empresa' })
     const remoteJid = String(req.body.remoteJid || '').trim()
+    const contactJid = String(req.body.contactJid || remoteJid).trim()
     const id = String(req.body.id || '').trim()
-    if (!remoteJid || !id) return res.status(400).json({ error: 'Mensagem não informada' })
+    if (!remoteJid || !contactJid || !id) return res.status(400).json({ error: 'Mensagem não informada' })
     const channel = await messagingChannel(tenantId)
     if (!channel) return res.status(409).json({ error: 'Selecione um canal para atendimento' })
     if (channel.provider !== 'evolution') return res.status(501).json({ error: 'Canal ainda não suportado' })
-    await evolutionRequest(`/chat/markMessageAsRead/${encodeURIComponent(channel.evolutionInstanceName)}`, {
-      method: 'POST',
-      body: JSON.stringify({ readMessages: [{ remoteJid, id, fromMe: Boolean(req.body.fromMe) }] }),
+    await prisma.whatsAppConversationState.upsert({
+      where: { tenantId_provider_contactJid: { tenantId, provider: channel.provider, contactJid } },
+      create: { tenantId, provider: channel.provider, contactJid, readAt: new Date() },
+      update: { readAt: new Date() },
     })
+    try {
+      await evolutionRequest(`/chat/markMessageAsRead/${encodeURIComponent(channel.evolutionInstanceName)}`, {
+        method: 'POST',
+        body: JSON.stringify({ readMessages: [{ remoteJid, id, fromMe: Boolean(req.body.fromMe) }] }),
+      })
+    } catch (error) {
+      console.warn('Evolution não confirmou a leitura; estado local foi mantido:', error.message)
+    }
     res.json({ read: true })
   } catch (error) {
     console.error('Erro ao marcar conversa como lida:', error)

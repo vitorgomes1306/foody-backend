@@ -108,6 +108,7 @@ model WhatsAppConversationState {
   provider   WhatsAppProvider
   contactJid String
   archivedAt DateTime?
+  readAt     DateTime?
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
 
