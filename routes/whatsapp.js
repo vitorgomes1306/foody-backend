@@ -228,11 +228,20 @@ function chatActivityAt(chat) {
 }
 
 function canonicalChatJid(chat) {
-  return String(chat?.remoteJidAlt || chat?.lastMessage?.key?.remoteJidAlt || chat?.lastMessage?.contextInfo?.participant || chat?.remoteJid || chat?.id || '').trim()
+  return String(chat?.contactJid || chat?.remoteJidAlt || chat?.lastMessage?.key?.remoteJidAlt || chat?.lastMessage?.contextInfo?.participant || chat?.remoteJid || chat?.id || '').trim()
 }
 
 function chatLastMessageFromMe(chat) {
-  return Boolean(chat?.lastMessage?.key?.fromMe ?? chat?.lastMessage?.fromMe)
+  const value = chat?.lastMessage?.key?.fromMe ?? chat?.lastMessage?.fromMe
+  return typeof value === 'boolean' ? value : null
+}
+
+function validLastMessageActivity(chat) {
+  const message = chat?.lastMessage
+  if (!message || chatLastMessageFromMe(chat) === null) return null
+  const id = String(message?.key?.id || message?.id || '').trim()
+  const activityAt = messageActivityAt(message)
+  return id && activityAt ? activityAt : null
 }
 
 function messageActivityAt(message) {
@@ -278,17 +287,21 @@ router.get('/tenant/:tenantId/whatsapp-messaging/chats', authMiddleware, async (
       if (!contactJid) continue
       const current = chatsByContact.get(contactJid)
       const linkedJids = [...new Set([...(current?.linkedJids || []), chat?.remoteJid, chat?.id, contactJid].filter(Boolean))]
+      const preservedName = current?.name || current?.pushName || current?.contact?.pushName || current?.lastMessage?.pushName || chat?.name || chat?.pushName || chat?.contact?.pushName || chat?.lastMessage?.pushName || null
       if (!current || (chatActivityAt(chat)?.getTime() || 0) >= (chatActivityAt(current)?.getTime() || 0)) {
-        chatsByContact.set(contactJid, { ...current, ...chat, remoteJid: contactJid, linkedJids })
+        chatsByContact.set(contactJid, { ...current, ...chat, contactJid, remoteJid: contactJid, linkedJids, ...(preservedName ? { name: preservedName, pushName: preservedName } : {}) })
       } else {
-        chatsByContact.set(contactJid, { ...current, linkedJids })
+        chatsByContact.set(contactJid, { ...current, contactJid, linkedJids, ...(preservedName ? { name: preservedName, pushName: preservedName } : {}) })
       }
     }
     const chatsWithLocalReadState = [...chatsByContact.values()].map((chat) => {
-      const activityAt = chatActivityAt(chat)
-      const readAt = stateByContact.get(canonicalChatJid(chat))?.readAt
+      const activityAt = validLastMessageActivity(chat)
+      const readAt = [canonicalChatJid(chat), ...(chat.linkedJids || [])]
+        .map((jid) => stateByContact.get(jid)?.readAt)
+        .filter(Boolean)
+        .sort((a, b) => b.getTime() - a.getTime())[0] || null
       if (chatLastMessageFromMe(chat)) return { ...chat, unreadMessages: 0, unreadCount: 0 }
-      if (activityAt && (!readAt || activityAt > readAt)) return { ...chat, unreadMessages: 1, unreadCount: 1 }
+      if (chatLastMessageFromMe(chat) === false && activityAt && (!readAt || activityAt > readAt)) return { ...chat, unreadMessages: 1, unreadCount: 1 }
       return { ...chat, unreadMessages: 0, unreadCount: 0 }
     })
     const unreadCount = chatsWithLocalReadState.reduce((total, chat) => total + Number(chat.unreadCount || 0), 0)
