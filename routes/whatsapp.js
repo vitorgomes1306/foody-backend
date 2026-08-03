@@ -272,14 +272,27 @@ router.get('/tenant/:tenantId/whatsapp-messaging/chats', authMiddleware, async (
         where: { tenantId, provider: channel.provider, contactJid: { in: [...reopenedContacts] } }, data: { archivedAt: null },
       })
     }
-    const chatsWithLocalReadState = visibleChats.map((chat) => {
+    const chatsByContact = new Map()
+    for (const chat of visibleChats) {
+      const contactJid = canonicalChatJid(chat)
+      if (!contactJid) continue
+      const current = chatsByContact.get(contactJid)
+      const linkedJids = [...new Set([...(current?.linkedJids || []), chat?.remoteJid, chat?.id, contactJid].filter(Boolean))]
+      if (!current || (chatActivityAt(chat)?.getTime() || 0) >= (chatActivityAt(current)?.getTime() || 0)) {
+        chatsByContact.set(contactJid, { ...current, ...chat, remoteJid: contactJid, linkedJids })
+      } else {
+        chatsByContact.set(contactJid, { ...current, linkedJids })
+      }
+    }
+    const chatsWithLocalReadState = [...chatsByContact.values()].map((chat) => {
       const activityAt = chatActivityAt(chat)
       const readAt = stateByContact.get(canonicalChatJid(chat))?.readAt
       if (chatLastMessageFromMe(chat)) return { ...chat, unreadMessages: 0, unreadCount: 0 }
-      if (!readAt || !activityAt || activityAt > readAt) return chat
+      if (activityAt && (!readAt || activityAt > readAt)) return { ...chat, unreadMessages: 1, unreadCount: 1 }
       return { ...chat, unreadMessages: 0, unreadCount: 0 }
     })
-    res.json({ provider: channel.provider, instanceName: channel.evolutionInstanceName, startedAt, chats: chatsWithLocalReadState })
+    const unreadCount = chatsWithLocalReadState.reduce((total, chat) => total + Number(chat.unreadCount || 0), 0)
+    res.json({ provider: channel.provider, instanceName: channel.evolutionInstanceName, startedAt, unreadCount, chats: chatsWithLocalReadState })
   } catch (error) {
     console.error('Erro ao carregar conversas:', error)
     res.status(error.status >= 400 && error.status < 600 ? error.status : 500).json({ error: error.message || 'Erro ao carregar conversas' })
@@ -313,7 +326,7 @@ router.post('/tenant/:tenantId/whatsapp-messaging/chats/read', authMiddleware, a
     const remoteJid = String(req.body.remoteJid || '').trim()
     const contactJid = String(req.body.contactJid || remoteJid).trim()
     const id = String(req.body.id || '').trim()
-    if (!remoteJid || !contactJid || !id) return res.status(400).json({ error: 'Mensagem não informada' })
+    if (!remoteJid || !contactJid) return res.status(400).json({ error: 'Conversa não informada' })
     const channel = await messagingChannel(tenantId)
     if (!channel) return res.status(409).json({ error: 'Selecione um canal para atendimento' })
     if (channel.provider !== 'evolution') return res.status(501).json({ error: 'Canal ainda não suportado' })
@@ -323,6 +336,7 @@ router.post('/tenant/:tenantId/whatsapp-messaging/chats/read', authMiddleware, a
       update: { readAt: new Date() },
     })
     try {
+      if (!id) throw new Error('ID da mensagem não fornecido pela Evolution')
       await evolutionRequest(`/chat/markMessageAsRead/${encodeURIComponent(channel.evolutionInstanceName)}`, {
         method: 'POST',
         body: JSON.stringify({ readMessages: [{ remoteJid, id, fromMe: Boolean(req.body.fromMe) }] }),
