@@ -299,6 +299,27 @@ router.post('/tenant/:tenantId/whatsapp-messaging/chats/archive', authMiddleware
   }
 })
 
+router.post('/tenant/:tenantId/whatsapp-messaging/chats/read', authMiddleware, async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId
+    if (!(await ownedTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado à empresa' })
+    const remoteJid = String(req.body.remoteJid || '').trim()
+    const id = String(req.body.id || '').trim()
+    if (!remoteJid || !id) return res.status(400).json({ error: 'Mensagem não informada' })
+    const channel = await messagingChannel(tenantId)
+    if (!channel) return res.status(409).json({ error: 'Selecione um canal para atendimento' })
+    if (channel.provider !== 'evolution') return res.status(501).json({ error: 'Canal ainda não suportado' })
+    await evolutionRequest(`/chat/markMessageAsRead/${encodeURIComponent(channel.evolutionInstanceName)}`, {
+      method: 'POST',
+      body: JSON.stringify({ readMessages: [{ remoteJid, id, fromMe: Boolean(req.body.fromMe) }] }),
+    })
+    res.json({ read: true })
+  } catch (error) {
+    console.error('Erro ao marcar conversa como lida:', error)
+    res.status(error.status >= 400 && error.status < 600 ? error.status : 500).json({ error: error.message || 'Erro ao marcar conversa como lida' })
+  }
+})
+
 router.get('/tenant/:tenantId/whatsapp-messaging/messages', authMiddleware, async (req, res) => {
   try {
     const tenantId = req.params.tenantId
