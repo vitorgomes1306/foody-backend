@@ -251,6 +251,19 @@ router.get('/public/tenant/:slug', async (req, res) => {
           logoUrl: true,
           phone: true,
           deliveryFee: true,
+          zipCode: true,
+          street: true,
+          number: true,
+          complement: true,
+          district: true,
+          city: true,
+          state: true,
+          country: true,
+          email: true,
+          website: true,
+          instagram: true,
+          facebook: true,
+          geoLocation: true,
         },
       });
     } catch (err) {
@@ -796,7 +809,7 @@ router.post(
   ]),
   async (req, res) => {
   try {
-    const { name, slug, phone, userId, logoUrl, deliveryFee, settings } = req.body;
+    const { name, slug, phone, userId, logoUrl, deliveryFee, settings, zipCode, street, number, complement, district, city, state, country, email, website, instagram, facebook } = req.body;
     const parsedUserId = Number(userId);
     const normalizedLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
     const parsedDeliveryFee = typeof deliveryFee === 'undefined' ? null : parsePriceToDecimalString(deliveryFee);
@@ -861,6 +874,18 @@ router.post(
           settings: parsedSettings.value ?? defaultTenantSettings(),
           ownerId: parsedUserId,
           active: true,
+          zipCode: zipCode?.trim() || null,
+          street: street?.trim() || null,
+          number: number?.trim() || null,
+          complement: complement?.trim() || null,
+          district: district?.trim() || null,
+          city: city?.trim() || null,
+          state: state?.trim().toUpperCase() || null,
+          country: country?.trim() || 'Brasil',
+          email: email?.trim() || null,
+          website: website?.trim() || null,
+          instagram: instagram?.trim() || null,
+          facebook: facebook?.trim() || null,
         },
       });
     } catch (err) {
@@ -982,7 +1007,7 @@ router.put(
   async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, phone, active, logoUrl, deliveryFee, settings } = req.body;
+    const { name, slug, phone, active, logoUrl, deliveryFee, settings, zipCode, street, number, complement, district, city, state, country, email, website, instagram, facebook } = req.body;
     const parsedActive = active === 'true' ? true : active === 'false' ? false : undefined;
     const normalizedLogoUrl = typeof logoUrl === 'string' ? logoUrl.trim() : undefined;
     const parsedDeliveryFee = typeof deliveryFee === 'undefined' ? null : parsePriceToDecimalString(deliveryFee);
@@ -1035,6 +1060,18 @@ router.put(
           active: typeof parsedActive === 'boolean' ? parsedActive : tenantExists.active,
           ...(parsedDeliveryFee !== null ? { deliveryFee: parsedDeliveryFee } : {}),
           ...(typeof settings !== 'undefined' ? { settings: parsedSettings.value } : {}),
+          zipCode: zipCode?.trim() || null,
+          street: street?.trim() || null,
+          number: number?.trim() || null,
+          complement: complement?.trim() || null,
+          district: district?.trim() || null,
+          city: city?.trim() || null,
+          state: state?.trim().toUpperCase() || null,
+          country: country?.trim() || 'Brasil',
+          email: email?.trim() || null,
+          website: website?.trim() || null,
+          instagram: instagram?.trim() || null,
+          facebook: facebook?.trim() || null,
         },
       });
     } catch (err) {
