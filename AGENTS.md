@@ -1,27 +1,18 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-03 11:23pm GMT-3
+# [foody] recent context, 2026-08-04 6:45am GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (18,590t read) | 677,672t work | 97% savings
+Stats: 50 obs (18,078t read) | 711,721t work | 97% savings
 
 ### Aug 1, 2026
 S295 Fix Supabase image uploads in the foody/chefito project — credentials were empty, then the configured project was found to be unreachable (DNS ENOTFOUND). User now wants to switch to a different Supabase project. (Aug 1 at 1:25 PM)
 S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase project DNS unreachable), user wants to switch to a different/working Supabase project (Aug 1 at 1:25 PM)
 ### Aug 2, 2026
-1768 9:54a 🔵 Vercel SPA Refresh Returns 404 — Missing Rewrite Rule
-1769 " 🔴 Added vercel.json SPA Fallback Rewrite to Fix F5 404
-1770 10:03a 🔵 Production Images Broken — /uploads Paths Resolve Against Vercel CDN
-1771 " 🔵 Scope of /uploads Image URLs — 10+ <img> Sites Need apiUrl() Prefix
-1772 10:04a 🔴 Fixed Production Image URLs — assetUrl() Helper Rewrites /uploads Paths
-1773 " 🔵 Railway Filesystem Serves Uploaded Images — But Files Are Ephemeral
-1774 " ⚖️ New Feature: Local Print Node for Order Receipts
-1775 10:20a 🟣 Local Print Agent Implemented — Chefito Print Agent
-1776 10:23a 🔴 Print Agent Node 18 Compatibility — Replaced import.meta.dirname with fileURLToPath
 1777 10:33a 🔵 Print Agent Detects Orders But Doesn't Print — PRINT_MODE Configuration Question
 1779 " 🔵 Thermal Print Output Too Narrow — PAPER_WIDTH Doesn't Match Printer Paper
 1780 " 🔵 Thermal Print Receipt Shows Only ~10 Characters Per Line With Tiny Font
@@ -65,6 +56,15 @@ S297 Novo produto Wizard button in /catalog — guided multi-step product creati
 1815 11:22p 🟣 Feature request: show waiter access link on /waiters page
 1816 " 🔵 Waiter access URL pattern and slug availability for /waiters link display
 1817 " 🟣 Waiter access link card added to /waiters page
+1818 11:23p 🔴 Waiter access link card made responsive with flex-wrap layout
+1819 " 🟣 Tenant logo shown on waiter login screen and standalone header
+1820 11:25p ✅ Frontend build verified after waiter logo branding changes
+1821 11:35p 🟣 Feature request: "repeat price for all flavors" checkbox in ProductWizard prices step
+1822 " 🔵 ProductWizard prices step structure — three distinct pricing modes
+1823 11:36p 🟣 ProductWizard "same price for all flavors" state and save logic implemented
+1824 " 🟣 ProductWizard "repeat price for all flavors" checkbox UI added and verified
+1825 " 🔵 ProductFlavor and OrderItemFlavor schema structure confirmed
+1826 11:39p 🟣 ProductFlavor description field added to schema and API
 
-Access 678k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 712k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

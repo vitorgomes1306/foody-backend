@@ -383,9 +383,10 @@ router.post("/tenant/:tenantId/products/:id/flavors", authMiddleware, async (req
     const product = await prisma.product.findFirst({ where: { id: productId, tenantId }, select: { id: true } })
     if (!product) return res.status(404).json({ error: "Produto não encontrado" })
     const name = typeof req.body?.name === "string" ? req.body.name.trim() : ""
+    const description = typeof req.body?.description === "string" ? req.body.description.trim() : ""
     const price = parsePriceToPrismaDecimalString(req.body?.price)
     if (!name || !price) return res.status(400).json({ error: "Nome e preço do sabor são obrigatórios" })
-    const flavor = await prisma.productFlavor.create({ data: { productId, name, price, active: req.body?.active !== false } })
+    const flavor = await prisma.productFlavor.create({ data: { productId, name, description: description || null, price, active: req.body?.active !== false } })
     return res.status(201).json(flavor)
   } catch (error) {
     if (error?.code === "P2002") return res.status(409).json({ error: "Este sabor já está cadastrado" })
@@ -403,7 +404,7 @@ router.put("/tenant/:tenantId/products/:productId/flavors/:id", authMiddleware, 
     if (!existing) return res.status(404).json({ error: "Sabor não encontrado" })
     const price = typeof req.body?.price !== "undefined" ? parsePriceToPrismaDecimalString(req.body.price) : undefined
     if (typeof req.body?.price !== "undefined" && !price) return res.status(400).json({ error: "Preço inválido" })
-    const flavor = await prisma.productFlavor.update({ where: { id }, data: { name: typeof req.body?.name === "string" ? req.body.name.trim() : undefined, price, active: typeof req.body?.active === "boolean" ? req.body.active : undefined } })
+    const flavor = await prisma.productFlavor.update({ where: { id }, data: { name: typeof req.body?.name === "string" ? req.body.name.trim() : undefined, description: typeof req.body?.description === "string" ? req.body.description.trim() || null : undefined, price, active: typeof req.body?.active === "boolean" ? req.body.active : undefined } })
     return res.json(flavor)
   } catch (error) { console.error(error); return res.status(500).json({ error: "Erro ao atualizar sabor" }) }
 })
