@@ -13,7 +13,7 @@ router.post('/public/tenant/:slug/waiter/login', async (req, res) => {
     const username = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : ''
     const password = typeof req.body?.password === 'string' ? req.body.password : ''
     if (!username || !password) return res.status(400).json({ error: 'Usuário e senha são obrigatórios' })
-    const tenant = await prisma.tenant.findFirst({ where: { slug: req.params.slug.trim().toLowerCase(), active: true }, select: { id: true, name: true, slug: true } })
+    const tenant = await prisma.tenant.findFirst({ where: { slug: req.params.slug.trim().toLowerCase(), active: true }, select: { id: true, name: true, slug: true, logoUrl: true } })
     if (!tenant) return res.status(404).json({ error: 'Empresa não encontrada' })
     const waiter = await prisma.waiter.findUnique({ where: { tenantId_username: { tenantId: tenant.id, username } } })
     if (!waiter || !waiter.active || !(await bcrypt.compare(password, waiter.password))) return res.status(401).json({ error: 'Usuário ou senha inválidos' })
@@ -29,7 +29,7 @@ router.post('/public/tenant/:slug/waiter/session', authMiddleware, async (req, r
   try {
     if (req.authRole !== 'waiter' || !req.waiterId || !req.tenantId) return res.status(403).json({ error: 'Sessão de garçom inválida' })
     const tenant = await prisma.tenant.findFirst({
-      where: { id: req.tenantId, slug: req.params.slug.trim().toLowerCase(), active: true }, select: { id: true, name: true, slug: true },
+      where: { id: req.tenantId, slug: req.params.slug.trim().toLowerCase(), active: true }, select: { id: true, name: true, slug: true, logoUrl: true },
     })
     if (!tenant) return res.status(401).json({ error: 'Empresa indisponível' })
     const waiter = await prisma.waiter.findFirst({ where: { id: req.waiterId, tenantId: tenant.id, active: true } })
