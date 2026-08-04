@@ -123,6 +123,8 @@ function isMissingAnyOrderColumns(err) {
     isMissingOrderColumn(err, "waiterCommissionAmount") ||
     isMissingOrderColumn(err, "waiterCommissionAddedToTotal")
     || isMissingOrderColumn(err, "customerSessionId")
+    || isMissingOrderColumn(err, "variantId")
+    || isMissingOrderColumn(err, "variantNameApplied")
   )
 }
 
@@ -166,6 +168,8 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
         orderId: true,
         productId: true,
         fractionProductId: true,
+        variantId: true,
+        variantNameApplied: true,
         quantity: true,
         unitPrice: true,
         notes: true,
@@ -173,6 +177,7 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
         addedAt: true,
         product: true,
         fractionProduct: true,
+        variant: true,
         flavors: { orderBy: { id: "asc" }, include: { flavor: true } },
         options: {
           select: {
@@ -261,6 +266,7 @@ async function buildOrderCreateData({ tenantId, body }) {
   const productIds = []
   const optionIds = []
   const flavorIds = []
+  const variantIds = []
 
   for (const item of itemsInput) {
     const productId = parseIntOrNull(item?.productId)
@@ -269,6 +275,8 @@ async function buildOrderCreateData({ tenantId, body }) {
     if (!quantity || quantity < 1) return { ok: false, status: 400, error: "quantity inválido" }
 
     productIds.push(productId)
+    const variantId = parseIntOrNull(item?.variantId)
+    if (variantId) variantIds.push(variantId)
     const fractionProductId = parseIntOrNull(item?.fractionProductId)
     if (fractionProductId) productIds.push(fractionProductId)
     for (const selectedFlavor of Array.isArray(item?.flavors) ? item.flavors : []) {
@@ -285,10 +293,10 @@ async function buildOrderCreateData({ tenantId, body }) {
     }
   }
 
-  const [products, options, flavors, tenant] = await Promise.all([
+  const [products, options, flavors, variants, tenant] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId, id: { in: productIds }, active: true },
-      select: { id: true, price: true, allowFraction: true, skipKds: true, usesFlavors: true, maxFlavors: true },
+      select: { id: true, price: true, allowFraction: true, skipKds: true, usesFlavors: true, maxFlavors: true, variants: { where: { active: true }, select: { id: true } } },
     }),
     optionIds.length
       ? prisma.option.findMany({
@@ -302,6 +310,9 @@ async function buildOrderCreateData({ tenantId, body }) {
       : Promise.resolve([]),
     flavorIds.length
       ? prisma.productFlavor.findMany({ where: { id: { in: flavorIds }, active: true }, select: { id: true, productId: true, name: true, price: true } })
+      : Promise.resolve([]),
+    variantIds.length
+      ? prisma.productVariant.findMany({ where: { id: { in: variantIds }, active: true }, include: { flavorPrices: { where: { active: true } } } })
       : Promise.resolve([]),
     (async () => {
       try {
@@ -320,6 +331,7 @@ async function buildOrderCreateData({ tenantId, body }) {
   const productById = new Map(products.map((p) => [p.id, p]))
   const optionById = new Map(options.map((o) => [o.id, o]))
   const flavorById = new Map(flavors.map((flavor) => [flavor.id, flavor]))
+  const variantById = new Map(variants.map((variant) => [variant.id, variant]))
 
   const itemsToCreate = []
   let totalCents = 0n
@@ -332,6 +344,10 @@ async function buildOrderCreateData({ tenantId, body }) {
 
     const product = productId ? productById.get(productId) : null
     if (!product) return { ok: false, status: 400, error: "Produto inválido ou inativo" }
+    const variantId = parseIntOrNull(item?.variantId)
+    const variant = variantId ? variantById.get(variantId) : null
+    if (product.variants?.length && !variantId) return { ok: false, status: 400, error: "Escolha o tamanho do produto" }
+    if (variantId && (!variant || variant.productId !== productId)) return { ok: false, status: 400, error: "Tamanho inválido para o produto" }
 
     const fractionProductId = parseIntOrNull(item?.fractionProductId)
     const fractionProduct = fractionProductId ? productById.get(fractionProductId) : null
@@ -351,10 +367,14 @@ async function buildOrderCreateData({ tenantId, body }) {
     if (!product.usesFlavors && selectedFlavorIds.length) return { ok: false, status: 400, error: "Este produto não utiliza sabores" }
     const selectedFlavors = selectedFlavorIds.map((id) => flavorById.get(id))
     if (selectedFlavors.some((flavor) => !flavor || flavor.productId !== productId)) return { ok: false, status: 400, error: "Sabor inválido para o produto" }
-    let unitPriceCents = fractionPriceCents !== null ? (primaryPriceCents + fractionPriceCents + 1n) / 2n : primaryPriceCents
+    let unitPriceCents = variant ? decimalStringToCents(variant.price?.toString?.() ?? String(variant.price)) : fractionPriceCents !== null ? (primaryPriceCents + fractionPriceCents + 1n) / 2n : primaryPriceCents
+    if (unitPriceCents === null) return { ok: false, status: 500, error: "Preço da variação inválido" }
     const flavorsToCreate = []
     if (selectedFlavors.length) {
-      const flavorPrices = selectedFlavors.map((flavor) => decimalStringToCents(flavor.price?.toString?.() ?? String(flavor.price)))
+      const flavorPrices = selectedFlavors.map((flavor) => {
+        const variantPrice = variant?.flavorPrices?.find((item) => item.flavorId === flavor.id)
+        return decimalStringToCents((variantPrice?.price ?? flavor.price)?.toString?.() ?? String(variantPrice?.price ?? flavor.price))
+      })
       if (flavorPrices.some((price) => price === null)) return { ok: false, status: 500, error: "Preço do sabor inválido" }
       unitPriceCents = (flavorPrices.reduce((sum, price) => sum + price, 0n) + BigInt(selectedFlavors.length - 1)) / BigInt(selectedFlavors.length)
       const fraction = (1 / selectedFlavors.length).toFixed(4)
@@ -395,6 +415,8 @@ async function buildOrderCreateData({ tenantId, body }) {
     itemsToCreate.push({
       productId,
       fractionProductId: fractionProductId || null,
+      variantId: variantId || null,
+      variantNameApplied: variant?.name || null,
       quantity,
       unitPrice: centsToDecimalString(unitPriceCents),
       notes: itemNotes || null,

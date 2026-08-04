@@ -49,7 +49,7 @@ export async function notifyOrderCreated(prisma, order) {
     const items = (order?.items || []).map((item) => {
       const flavors = (item.flavors || []).map((flavor) => flavor.nameApplied).filter(Boolean)
       const options = (item.options || []).map((option) => option.option?.name).filter(Boolean)
-      return `• ${item.quantity || 1}x ${item.product?.name || 'Produto'}${flavors.length ? ` (${flavors.join(' + ')})` : ''}${options.length ? ` + ${options.join(', ')}` : ''}`
+      return `• ${item.quantity || 1}x ${item.product?.name || 'Produto'}${item.variantNameApplied ? ` (${item.variantNameApplied})` : ''}${flavors.length ? ` (${flavors.join(' + ')})` : ''}${options.length ? ` + ${options.join(', ')}` : ''}`
     })
     const text = [
       `Olá, ${order.customerName || 'cliente'}! 👋`, `Recebemos seu pedido #${String(order.id).padStart(4, '0')} na ${company}.`, '',

@@ -15,7 +15,7 @@ const destination = (order) => {
 }
 
 function itemLines(item) {
-  const lines = [`${item.quantity || 1}x ${clean(item?.product?.name || 'Produto')}`]
+  const lines = [`${item.quantity || 1}x ${clean(item?.product?.name || 'Produto')}${item?.variantNameApplied ? ` (${clean(item.variantNameApplied)})` : ''}`]
   const flavors = Array.isArray(item?.flavors) ? item.flavors : []
   if (flavors.length) lines.push(`  ${flavors.map((flavor) => `${flavors.length > 1 ? '1/2 ' : ''}${clean(flavor.nameApplied || flavor.flavor?.name)}`).join(' + ')}`)
   for (const selected of item?.options || []) lines.push(`  + ${selected.quantity || 1}x ${clean(selected.option?.name || 'Adicional')}`)

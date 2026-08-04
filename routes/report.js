@@ -96,6 +96,7 @@ router.get('/tenant/:tenantId/reports/sales', authMiddleware, async (req, res) =
           notes: true,
           addedAt: true,
           product: { select: { name: true } },
+          variantNameApplied: true,
           flavors: { select: { id: true, nameApplied: true, priceApplied: true, fraction: true } },
           options: { select: { id: true, quantity: true, priceAdded: true, option: { select: { name: true } } } },
         },

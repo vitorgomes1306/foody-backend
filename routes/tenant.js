@@ -302,6 +302,7 @@ router.get('/public/tenant/:slug', async (req, res) => {
               orderBy: [{ seq: 'asc' }, { id: 'asc' }],
               include: {
                 flavors: { where: { active: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] },
+                variants: { where: { active: true }, orderBy: [{ seq: 'asc' }, { id: 'asc' }], include: { flavorPrices: true } },
                 optionGroups: {
                   orderBy: [{ id: 'asc' }],
                   include: { options: true },

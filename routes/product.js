@@ -163,7 +163,7 @@ router.get("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
     const products = await prisma.product.findMany({
       where: { tenantId, ...(typeof active === "boolean" ? { active } : {}) },
       orderBy: [{ seq: "asc" }, { id: "asc" }],
-      include: { flavors: { where: { active: true }, orderBy: [{ name: "asc" }, { id: "asc" }] }, optionGroups: { orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } } },
+      include: { flavors: { where: { active: true }, orderBy: [{ name: "asc" }, { id: "asc" }] }, variants: { where: { active: true }, orderBy: [{ seq: "asc" }, { id: "asc" }], include: { flavorPrices: true } }, optionGroups: { orderBy: { id: "asc" }, include: { options: { orderBy: { id: "asc" } } } } },
     })
 
     return res.status(200).json(products)
@@ -406,6 +406,69 @@ router.put("/tenant/:tenantId/products/:productId/flavors/:id", authMiddleware, 
     const flavor = await prisma.productFlavor.update({ where: { id }, data: { name: typeof req.body?.name === "string" ? req.body.name.trim() : undefined, price, active: typeof req.body?.active === "boolean" ? req.body.active : undefined } })
     return res.json(flavor)
   } catch (error) { console.error(error); return res.status(500).json({ error: "Erro ao atualizar sabor" }) }
+})
+
+router.get("/tenant/:tenantId/products/:productId/variants", authMiddleware, async (req, res) => {
+  try {
+    const { tenantId } = req.params
+    const productId = parseIntOrNull(req.params.productId)
+    const allowed = (req.authRole === "waiter" && req.tenantId === tenantId) || await assertTenantOwner({ tenantId, userId: req.userId })
+    if (!allowed) return res.status(403).json({ error: "Acesso negado ao tenant" })
+    const variants = await prisma.productVariant.findMany({ where: { productId, product: { tenantId } }, orderBy: [{ seq: "asc" }, { id: "asc" }], include: { flavorPrices: true } })
+    return res.json(variants)
+  } catch (error) { console.error(error); return res.status(500).json({ error: "Erro ao listar variações" }) }
+})
+
+router.post("/tenant/:tenantId/products/:productId/variants", authMiddleware, async (req, res) => {
+  try {
+    const { tenantId } = req.params
+    const productId = parseIntOrNull(req.params.productId)
+    if (!(await assertTenantOwner({ tenantId, userId: req.userId }))) return res.status(403).json({ error: "Acesso negado ao tenant" })
+    const product = await prisma.product.findFirst({ where: { id: productId, tenantId }, select: { id: true, price: true } })
+    if (!product) return res.status(404).json({ error: "Produto não encontrado" })
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : ""
+    const price = parsePriceToPrismaDecimalString(req.body?.price ?? product.price)
+    if (!name || !price) return res.status(400).json({ error: "Nome e preço da variação são obrigatórios" })
+    const count = await prisma.productVariant.count({ where: { productId } })
+    const variant = await prisma.productVariant.create({ data: { productId, name, price, seq: count + 1 }, include: { flavorPrices: true } })
+    return res.status(201).json(variant)
+  } catch (error) {
+    if (error?.code === "P2002") return res.status(409).json({ error: "Este tamanho já está cadastrado" })
+    console.error(error); return res.status(500).json({ error: "Erro ao cadastrar variação" })
+  }
+})
+
+router.put("/tenant/:tenantId/products/:productId/variants/:variantId", authMiddleware, async (req, res) => {
+  try {
+    const { tenantId } = req.params
+    const productId = parseIntOrNull(req.params.productId)
+    const variantId = parseIntOrNull(req.params.variantId)
+    if (!(await assertTenantOwner({ tenantId, userId: req.userId }))) return res.status(403).json({ error: "Acesso negado ao tenant" })
+    const existing = await prisma.productVariant.findFirst({ where: { id: variantId, productId, product: { tenantId } }, select: { id: true } })
+    if (!existing) return res.status(404).json({ error: "Variação não encontrada" })
+    const data = {}
+    if (typeof req.body?.name === "string" && req.body.name.trim()) data.name = req.body.name.trim()
+    if (typeof req.body?.price !== "undefined") {
+      const price = parsePriceToPrismaDecimalString(req.body.price)
+      if (!price) return res.status(400).json({ error: "Preço inválido" })
+      data.price = price
+    }
+    if (typeof req.body?.active === "boolean") data.active = req.body.active
+    const prices = Array.isArray(req.body?.flavorPrices) ? req.body.flavorPrices : []
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length) await tx.productVariant.update({ where: { id: variantId }, data })
+      for (const item of prices) {
+        const flavorId = parseIntOrNull(item?.flavorId)
+        const price = parsePriceToPrismaDecimalString(item?.price)
+        if (!flavorId || !price) throw Object.assign(new Error("Preço de sabor inválido"), { status: 400 })
+        const flavor = await tx.productFlavor.findFirst({ where: { id: flavorId, productId }, select: { id: true } })
+        if (!flavor) throw Object.assign(new Error("Sabor inválido"), { status: 400 })
+        await tx.productVariantFlavor.upsert({ where: { variantId_flavorId: { variantId, flavorId } }, create: { variantId, flavorId, price, active: item.active !== false }, update: { price, active: item.active !== false } })
+      }
+    })
+    const variant = await prisma.productVariant.findUnique({ where: { id: variantId }, include: { flavorPrices: true } })
+    return res.json(variant)
+  } catch (error) { console.error(error); return res.status(error.status || 500).json({ error: error.message || "Erro ao atualizar variação" }) }
 })
 
 // rota para excluir um produto do tenant (food truck) do usuário autenticado do tenant (food truck)

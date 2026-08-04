@@ -1,29 +1,18 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-03 11:57am GMT-3
+# [foody] recent context, 2026-08-03 11:03pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,849t read) | 415,009t work | 95% savings
+Stats: 50 obs (19,068t read) | 674,815t work | 97% savings
 
 ### Aug 1, 2026
 S295 Fix Supabase image uploads in the foody/chefito project — credentials were empty, then the configured project was found to be unreachable (DNS ENOTFOUND). User now wants to switch to a different Supabase project. (Aug 1 at 1:25 PM)
 S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase project DNS unreachable), user wants to switch to a different/working Supabase project (Aug 1 at 1:25 PM)
 ### Aug 2, 2026
-1742 12:00a 🔴 Flavor Button Layout Fix Build Confirmed in CounterProductConfigurator
-1744 12:06a 🟣 "Marcar como pronto" Button Added to OrdersBoard Production Column
-1745 12:07a 🟣 OrdersBoard "Marcar como pronto" Button Build Confirmed
-1747 12:16a 🟣 Detailed Daily Orders Report Modal — "Pedidos hoje" Card
-1748 " 🔵 Codebase State Before Detailed Daily Orders Report Feature
-1749 " 🟣 Order Source Filter Tabs in "Prontos para entrega" Column — /orders Board
-1750 12:24a 🟣 Sales Dashboard "Pedidos do dia" Tab — Modal Replaced with Dedicated Tab
-1751 " 🟣 Backend `todayOrders` Raw Array Exposed in Sales Report API
-1752 " 🔵 OrdersBoard Card Model Missing `waiterId` — Needed for Ready Column Source Filter
-1753 6:54a 🟣 Source Filter Tabs in "Prontos para entrega" Column — OrdersBoard
-1754 7:20a 🔵 Vercel Frontend 404 on Login — API URL Configuration Issue
 1755 7:21a 🔵 Root Cause of Vercel 404: Wrong Env Var Name + All-Relative API URLs
 1756 " 🔴 Vercel→Railway API Routing Fixed via Fetch Monkey-Patch + apiBase Module
 1758 " 🔵 Production 500 on User Registration — Prisma Binary Target Mismatch on Railway (Linux)
@@ -63,6 +52,42 @@ S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase 
 1791 " 🟣 Print Agent Files Synced to Windows Machine via SMB Share
 1792 11:58a 🔵 Windows Print Agent Configuration Verified — Printer Name is "termica2"
 1793 12:05p 🔵 PM2 `startup` Command Fails on Windows — "Init system not found"
+### Aug 3, 2026
+1794 9:22p 🔵 Foody Product Data Model — Variants, Flavors, and Fractions
+1795 " 🔵 Frontend Catalog Page Location Confirmed
+1796 " 🔵 Catalog.tsx Existing Product Form — Simple Modal Without Variants/Flavors
+1797 " 🔵 Frontend Product TypeScript Types Already Include Variants and Flavors
+1798 " 🔵 Backend Flavor and Variant CRUD APIs Already Exist
+1799 " 🔵 Backend Variant API Supports Per-Flavor Pricing in a Single POST
+1800 " 🟣 ProductWizardModal Component Created
+1801 9:28p 🟣 Catalog.tsx Wired to ProductWizardModal — Button and State Added
+1802 " 🔵 Two Parallel Frontend Codebases — Both Need Wizard
+1803 " 🟣 ProductWizard Component Built for chefito_frontend (Legacy JSX Admin)
+1804 10:54p ⚖️ Customer Pizza Order Flow — Fraction + Sizes UX Redesign Requested
+S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 3 at 10:54 PM)
+**Investigated**: - Full Foody project structure: Express/Prisma backend + two active frontends (chefito_frontend JSX legacy admin, frontend-chefito TSX/Tailwind newer rewrite)
+    - Existing Product data model: allowFraction, skipKds, usesFlavors, maxFlavors, ProductFlavor, ProductVariant, ProductVariantFlavor tables
+    - Backend API coverage: full CRUD for products, flavors, and variants already existed; flavor POST in chefito_frontend requires price field; variant POST uses count-based seq
+    - chefito_frontend/src/App.jsx CatalogPage: already had FlavorManager.jsx and VariantManager.jsx (new untracked file) for post-creation editing
+    - frontend-chefito/src/pages/Catalog.tsx: simpler modal without variants/flavors; types/product.ts already fully typed for variants+flavors
+    - CSS architecture: chefito_frontend uses inline styles in index.html &lt;style&gt; block, not separate CSS files
 
-Access 415k tokens of past work via get_observations([IDs]) or mem-search skill.
+**Learned**: - Two frontend codebases coexist: chefito_frontend (deployed JSX admin with lucide-react, react-dropzone) and frontend-chefito (newer TSX/Tailwind rewrite)
+    - Flavor creation in chefito_frontend requires both name AND price; frontend-chefito only requires name — different API contracts for same endpoint
+    - Variant seq is auto-assigned server-side (count+1) in chefito_frontend's backend; frontend-chefito backend accepts explicit seq
+    - Product soft-delete: if product has order history, DELETE sets active=false instead of physical deletion
+    - effectiveBasePrice() computes min(prices) across sizes/flavors to set the product's base price field
+    - canContinue() validates each step: requires ≥1 flavor if usesFlavors, ≥1 size if usesSizes, validates all price fields are valid numbers on step 3
+
+**Completed**: - Created chefito_frontend/src/products/ProductWizard.jsx: 4-step guided wizard (Informações → Formato → Preços → Revisão) with ToggleCard flags, ImagePicker via react-dropzone, dynamic price matrix for sizes×flavors
+    - Wired ProductWizard into chefito_frontend/src/App.jsx CatalogPage: "Novo produto Wizard" button (Sparkles icon, disabled if no categories), existing form renamed "Cadastro avançado"
+    - Injected ~60 wizard CSS classes into chefito_frontend/index.html inline style block including responsive @media(max-width:760px) breakpoints
+    - Build confirmed: npm run build exit 0, 1859 modules, no errors
+    - Also created frontend-chefito/src/components/ProductWizardModal.tsx: 6-step TSX wizard (Básico → Tipo → Sabores → Tamanhos → Foto → Revisar) with step-skipping logic when usesFlavors=false, ToggleCard, StepIndicator, bottom-sheet mobile layout
+    - Wired ProductWizardModal into frontend-chefito/src/pages/Catalog.tsx with showWizard state and import
+
+**Next Steps**: User requested a redesign of the customer-facing ordering flow for fractioned pizza products. Specifically: when a product has both allowFraction=true AND sizes (variants), the customer should see sizes displayed prominently before flavor selection. This targets the customer menu/counter UI (CounterProductConfigurator or equivalent), not the admin wizard. The example was cut off in the request — awaiting full specification or implementation of the new selection flow.
+
+
+Access 675k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
