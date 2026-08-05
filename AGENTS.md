@@ -1,24 +1,18 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-04 8:11pm GMT-3
+# [foody] recent context, 2026-08-05 2:23pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (17,948t read) | 1,002,261t work | 98% savings
+Stats: 50 obs (18,223t read) | 771,190t work | 98% savings
 
 ### Aug 1, 2026
 S295 Fix Supabase image uploads in the foody/chefito project — credentials were empty, then the configured project was found to be unreachable (DNS ENOTFOUND). User now wants to switch to a different Supabase project. (Aug 1 at 1:25 PM)
 S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase project DNS unreachable), user wants to switch to a different/working Supabase project (Aug 1 at 1:25 PM)
 ### Aug 3, 2026
-1794 9:22p 🔵 Foody Product Data Model — Variants, Flavors, and Fractions
-1795 " 🔵 Frontend Catalog Page Location Confirmed
-1796 " 🔵 Catalog.tsx Existing Product Form — Simple Modal Without Variants/Flavors
-1801 9:28p 🟣 Catalog.tsx Wired to ProductWizardModal — Button and State Added
-1802 " 🔵 Two Parallel Frontend Codebases — Both Need Wizard
-1803 " 🟣 ProductWizard Component Built for chefito_frontend (Legacy JSX Admin)
 1804 10:54p ⚖️ Customer Pizza Order Flow — Fraction + Sizes UX Redesign Requested
 1805 " ⚖️ Remove "Como deseja o produto?" Fraction Prompt — Implicit from Flavor Count
 S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 3 at 10:54 PM)
@@ -64,7 +58,13 @@ S297 Novo produto Wizard button in /catalog — guided multi-step product creati
 1844 7:52p 🔄 TenantSwitcher Reverted + Auto-Accept Toggle Moved Inside Dropdown per Company Row
 1845 7:53p 🔄 toggleAutoAccept Generalized to Work on Any Tenant, Not Just activeTenant
 1846 " ⚖️ Print Bill Feature Planned for /empresa/mesa Route
+1848 7:55p 🟣 PrintJob Queue Architecture Started — Schema + Routes for On-Demand Bill Printing
 1847 8:05p 🔵 Existing Print Agent Architecture in print-agent/ Directory
+1849 8:12p 🟣 PrintJob Schema and Migration Successfully Applied
+1850 " 🟣 routes/printJob.js Created and Registered in server.js
+1851 8:13p 🟣 Print Agent Extended with buildCustomerBill() for On-Demand Bill Printing
+1852 " 🔵 WaiterMyOrdersPage Already Has Print Button Using window.print()
+1853 " 🟣 Bill Print Button Added to WaiterMyOrdersPage — Frontend Build Passes
 
-Access 1002k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 771k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
