@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import authMiddleware from '../middlewares/auth.js';
 import { removeLocalUploads, saveLocalUpload } from '../utils/localUploads.js';
 import { getBusinessOpeningStatus } from '../utils/openingHours.js';
+import { applyPromotionalPrice, currentMenuClock, evaluateMenuSchedule } from '../utils/productMenuSchedule.js';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -286,7 +287,7 @@ router.get('/public/tenant/:slug', async (req, res) => {
 
     const tenantId = baseTenant.id;
 
-    const [media, openingHours, paymentMethods, categories] = await Promise.all([
+    const [media, openingHours, paymentMethods, categories, bestSellerRows] = await Promise.all([
       prisma.tenantMedia.findMany({ where: { tenantId }, orderBy: [{ id: 'asc' }] }).catch(() => []),
       prisma.tenantOpeningHour.findMany({ where: { tenantId }, orderBy: [{ weekday: 'asc' }] }).catch(() => []),
       prisma.tenantPaymentMethod
@@ -312,7 +313,45 @@ router.get('/public/tenant/:slug', async (req, res) => {
           },
         })
         .catch(() => []),
+      prisma.orderItem
+        .groupBy({
+          by: ['productId'],
+          where: { order: { tenantId, status: 'delivered' }, product: { active: true } },
+          _sum: { quantity: true },
+          orderBy: { _sum: { quantity: 'desc' } },
+          take: 10,
+        })
+        .catch(() => []),
     ]);
+
+    const menuClock = currentMenuClock();
+    const availableCategories = categories.map((category) => ({
+      ...category,
+      products: category.products.flatMap((product) => {
+        const availability = evaluateMenuSchedule(product.menuSchedule, menuClock);
+        if (!availability.available) return [];
+        if (availability.promotionalPrice === null) return [{ ...product, promotion: null }];
+        const originalPrice = product.price;
+        const adjust = (price) => applyPromotionalPrice(price, originalPrice, availability.promotionalPrice);
+        return [{
+          ...product,
+          originalPrice,
+          price: availability.promotionalPrice,
+          promotion: {
+            promotionalPrice: availability.promotionalPrice,
+            startTime: availability.schedule.startTime,
+            endTime: availability.schedule.endTime,
+          },
+          flavors: product.flavors.map((flavor) => ({ ...flavor, originalPrice: flavor.price, price: adjust(flavor.price) })),
+          variants: product.variants.map((variant) => ({
+            ...variant,
+            originalPrice: variant.price,
+            price: adjust(variant.price),
+            flavorPrices: variant.flavorPrices.map((entry) => ({ ...entry, originalPrice: entry.price, price: adjust(entry.price) })),
+          })),
+        }];
+      }),
+    }));
 
     return res.status(200).json({
       ...baseTenant,
@@ -321,7 +360,12 @@ router.get('/public/tenant/:slug', async (req, res) => {
       openingHours,
       openingStatus: getBusinessOpeningStatus(openingHours),
       paymentMethods,
-      categories,
+      categories: availableCategories,
+      menuClock,
+      bestSellers: bestSellerRows.map((row) => ({
+        productId: row.productId,
+        quantity: row._sum?.quantity || 0,
+      })),
     });
   } catch (error) {
     console.error(error);

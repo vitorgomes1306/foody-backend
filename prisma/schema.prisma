@@ -235,21 +235,23 @@ model Category {
 // PRODUTO
 // ─────────────────────────────────────────
 model Product {
-  id            Int      @id @default(autoincrement())
-  seq           Int
-  name          String
-  description   String?
-  price         Decimal  @db.Decimal(10, 2)
-  imageUrl      String?
-  active        Boolean  @default(true)
-  allowFraction Boolean  @default(false)
-  skipKds       Boolean  @default(false)
-  usesFlavors   Boolean  @default(false)
-  maxFlavors    Int      @default(1)
-  tenantId      String   @db.Uuid
-  categoryId    Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  seq            Int
+  name           String
+  description    String?
+  price          Decimal  @db.Decimal(10, 2)
+  imageUrl       String?
+  active         Boolean  @default(true)
+  allowFraction  Boolean  @default(false)
+  skipKds        Boolean  @default(false)
+  featuredOnMenu Boolean  @default(false)
+  menuSchedule   Json?
+  usesFlavors    Boolean  @default(false)
+  maxFlavors     Int      @default(1)
+  tenantId       String   @db.Uuid
+  categoryId     Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   tenant             Tenant           @relation(fields: [tenantId], references: [id])
   category           Category         @relation(fields: [categoryId], references: [id])

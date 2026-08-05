@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client"
 import authMiddleware from "../middlewares/auth.js"
 import { getBusinessOpeningStatus } from "../utils/openingHours.js"
 import { notifyOrderCreated, notifyOrderStatusChanged } from "../utils/orderWhatsAppNotification.js"
+import { currentMenuClock, evaluateMenuSchedule } from "../utils/productMenuSchedule.js"
 
 const prisma = new PrismaClient()
 const router = express.Router()
@@ -45,6 +46,11 @@ function centsToDecimalString(cents) {
   const intPart = abs / 100n
   const fracPart = abs % 100n
   return `${sign}${intPart.toString()}.${fracPart.toString().padStart(2, "0")}`
+}
+
+function applyPromotionToCents(valueCents, baseCents, promotionalCents) {
+  if (promotionalCents === null || baseCents <= 0n) return valueCents
+  return (valueCents * promotionalCents + baseCents / 2n) / baseCents
 }
 
 function parseOrderType(value) {
@@ -242,7 +248,7 @@ async function resolveTenantIdFromSlug(slug) {
   return tenant?.id ?? null
 }
 
-async function buildOrderCreateData({ tenantId, body }) {
+async function buildOrderCreateData({ tenantId, body, enforceMenuSchedule = false }) {
   const type = parseOrderType(body?.type)
   if (!type) return { ok: false, status: 400, error: "type inválido" }
 
@@ -296,7 +302,7 @@ async function buildOrderCreateData({ tenantId, body }) {
   const [products, options, flavors, variants, tenant] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId, id: { in: productIds }, active: true },
-      select: { id: true, price: true, allowFraction: true, skipKds: true, usesFlavors: true, maxFlavors: true, variants: { where: { active: true }, select: { id: true } } },
+      select: { id: true, name: true, price: true, menuSchedule: true, allowFraction: true, skipKds: true, usesFlavors: true, maxFlavors: true, variants: { where: { active: true }, select: { id: true } } },
     }),
     optionIds.length
       ? prisma.option.findMany({
@@ -336,6 +342,7 @@ async function buildOrderCreateData({ tenantId, body }) {
   const itemsToCreate = []
   let totalCents = 0n
   let allItemsReady = true
+  const menuClock = enforceMenuSchedule ? currentMenuClock() : null
 
   for (const item of itemsInput) {
     const productId = parseIntOrNull(item?.productId)
@@ -344,6 +351,8 @@ async function buildOrderCreateData({ tenantId, body }) {
 
     const product = productId ? productById.get(productId) : null
     if (!product) return { ok: false, status: 400, error: "Produto inválido ou inativo" }
+    const productAvailability = enforceMenuSchedule ? evaluateMenuSchedule(product.menuSchedule, menuClock) : { available: true, promotionalPrice: null }
+    if (!productAvailability.available) return { ok: false, status: 409, error: `${product.name} não está disponível neste dia ou horário` }
     const variantId = parseIntOrNull(item?.variantId)
     const variant = variantId ? variantById.get(variantId) : null
     if (product.variants?.length && !variantId) return { ok: false, status: 400, error: "Escolha o tamanho do produto" }
@@ -354,9 +363,15 @@ async function buildOrderCreateData({ tenantId, body }) {
     if (fractionProductId && (!product.allowFraction || !fractionProduct?.allowFraction)) {
       return { ok: false, status: 400, error: "Produto não permite pedido fracionado" }
     }
+    const fractionAvailability = fractionProduct && enforceMenuSchedule ? evaluateMenuSchedule(fractionProduct.menuSchedule, menuClock) : { available: true, promotionalPrice: null }
+    if (fractionProduct && !fractionAvailability.available) return { ok: false, status: 409, error: `${fractionProduct.name} não está disponível neste dia ou horário` }
     const primaryPriceCents = decimalStringToCents(product.price?.toString?.() ?? String(product.price))
     const fractionPriceCents = fractionProduct ? decimalStringToCents(fractionProduct.price?.toString?.() ?? String(fractionProduct.price)) : null
     if (primaryPriceCents === null || (fractionProduct && fractionPriceCents === null)) return { ok: false, status: 500, error: "Preço do produto inválido" }
+    const primaryPromotionalCents = decimalStringToCents(productAvailability.promotionalPrice)
+    const fractionPromotionalCents = decimalStringToCents(fractionAvailability.promotionalPrice)
+    const effectivePrimaryPriceCents = applyPromotionToCents(primaryPriceCents, primaryPriceCents, primaryPromotionalCents)
+    const effectiveFractionPriceCents = fractionPriceCents === null ? null : applyPromotionToCents(fractionPriceCents, fractionPriceCents, fractionPromotionalCents)
     // Produto fracionado é um único item: metade do valor de cada sabor.
     // O +1 faz arredondamento para o centavo superior quando a soma é ímpar.
     const selectedFlavorInputs = Array.isArray(item?.flavors) ? item.flavors : []
@@ -367,13 +382,20 @@ async function buildOrderCreateData({ tenantId, body }) {
     if (!product.usesFlavors && selectedFlavorIds.length) return { ok: false, status: 400, error: "Este produto não utiliza sabores" }
     const selectedFlavors = selectedFlavorIds.map((id) => flavorById.get(id))
     if (selectedFlavors.some((flavor) => !flavor || flavor.productId !== productId)) return { ok: false, status: 400, error: "Sabor inválido para o produto" }
-    let unitPriceCents = variant ? decimalStringToCents(variant.price?.toString?.() ?? String(variant.price)) : fractionPriceCents !== null ? (primaryPriceCents + fractionPriceCents + 1n) / 2n : primaryPriceCents
+    const variantPriceCents = variant ? decimalStringToCents(variant.price?.toString?.() ?? String(variant.price)) : null
+    if (variant && variantPriceCents === null) return { ok: false, status: 500, error: "Preço da variação inválido" }
+    let unitPriceCents = variant
+      ? applyPromotionToCents(variantPriceCents, primaryPriceCents, primaryPromotionalCents)
+      : effectiveFractionPriceCents !== null
+        ? (effectivePrimaryPriceCents + effectiveFractionPriceCents + 1n) / 2n
+        : effectivePrimaryPriceCents
     if (unitPriceCents === null) return { ok: false, status: 500, error: "Preço da variação inválido" }
     const flavorsToCreate = []
     if (selectedFlavors.length) {
       const flavorPrices = selectedFlavors.map((flavor) => {
         const variantPrice = variant?.flavorPrices?.find((item) => item.flavorId === flavor.id)
-        return decimalStringToCents((variantPrice?.price ?? flavor.price)?.toString?.() ?? String(variantPrice?.price ?? flavor.price))
+        const flavorPrice = decimalStringToCents((variantPrice?.price ?? flavor.price)?.toString?.() ?? String(variantPrice?.price ?? flavor.price))
+        return flavorPrice === null ? null : applyPromotionToCents(flavorPrice, primaryPriceCents, primaryPromotionalCents)
       })
       if (flavorPrices.some((price) => price === null)) return { ok: false, status: 500, error: "Preço do sabor inválido" }
       unitPriceCents = (flavorPrices.reduce((sum, price) => sum + price, 0n) + BigInt(selectedFlavors.length - 1)) / BigInt(selectedFlavors.length)
@@ -473,7 +495,7 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
       })
     }
 
-    const built = await buildOrderCreateData({ tenantId, body: req.body })
+    const built = await buildOrderCreateData({ tenantId, body: req.body, enforceMenuSchedule: true })
     if (!built.ok) return res.status(built.status).json({ error: built.error })
 
     const order = await prisma.$transaction(async (tx) => {

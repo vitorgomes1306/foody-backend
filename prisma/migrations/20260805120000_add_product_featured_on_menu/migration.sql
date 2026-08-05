@@ -1,0 +1,2 @@
+ALTER TABLE "Product"
+ADD COLUMN "featuredOnMenu" BOOLEAN NOT NULL DEFAULT false;

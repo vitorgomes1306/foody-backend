@@ -1,9 +1,10 @@
 import express from "express"
-import { PrismaClient } from "@prisma/client"
+import { Prisma, PrismaClient } from "@prisma/client"
 import multer from "multer"
 import { v4 as uuidv4 } from "uuid"
 import authMiddleware from "../middlewares/auth.js"
 import { saveLocalUpload } from "../utils/localUploads.js"
+import { normalizeMenuSchedule } from "../utils/productMenuSchedule.js"
 
 const prisma = new PrismaClient()
 const router = express.Router()
@@ -146,7 +147,7 @@ router.get("/tenant/:tenantId/products/next-seq", authMiddleware, async (req, re
     return res.status(200).json({ seq })
   } catch (error) {
     console.error(error)
-    return res.status(500).json({ error: "Erro interno do servidor" })
+    return res.status(error?.status || 500).json({ error: error?.status ? error.message : "Erro interno do servidor" })
   }
 })
 
@@ -233,11 +234,16 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
     const active = typeof req.body?.active === "boolean" ? req.body.active : true
     const allowFraction = req.body?.allowFraction === true
     const skipKds = req.body?.skipKds === true
+    const featuredOnMenu = req.body?.featuredOnMenu === true
+    const menuSchedule = normalizeMenuSchedule(req.body?.menuSchedule)
     const usesFlavors = req.body?.usesFlavors === true
     const maxFlavors = usesFlavors ? Math.min(2, Math.max(1, parseIntOrNull(req.body?.maxFlavors) || 1)) : 1
 
     if (!name || !price || !categoryId) {
       return res.status(400).json({ error: "Dados obrigatórios faltando" })
+    }
+    if (menuSchedule?.promotionalPrice !== null && Number(menuSchedule.promotionalPrice) >= Number(price)) {
+      return res.status(400).json({ error: "O preço promocional deve ser menor que o preço normal" })
     }
 
     const product = await createProductWithSeq({
@@ -251,6 +257,8 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
         active,
         allowFraction,
         skipKds,
+        featuredOnMenu,
+        menuSchedule: menuSchedule ?? Prisma.DbNull,
         usesFlavors,
         maxFlavors,
       },
@@ -259,7 +267,7 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
     return res.status(201).json(product)
   } catch (error) {
     console.error(error)
-    return res.status(500).json({ error: "Erro interno do servidor" })
+    return res.status(error?.status || 500).json({ error: error?.status ? error.message : "Erro interno do servidor" })
   }
 })
 
@@ -290,6 +298,8 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
     if (typeof req.body?.active === "boolean") data.active = req.body.active
     if (typeof req.body?.allowFraction === "boolean") data.allowFraction = req.body.allowFraction
     if (typeof req.body?.skipKds === "boolean") data.skipKds = req.body.skipKds
+    if (typeof req.body?.featuredOnMenu === "boolean") data.featuredOnMenu = req.body.featuredOnMenu
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "menuSchedule")) data.menuSchedule = normalizeMenuSchedule(req.body.menuSchedule) ?? Prisma.DbNull
     if (typeof req.body?.usesFlavors === "boolean") {
       data.usesFlavors = req.body.usesFlavors
       if (req.body.usesFlavors) data.allowFraction = false
@@ -303,6 +313,11 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
       const categoryId = parseIntOrNull(req.body.categoryId)
       if (!categoryId) return res.status(400).json({ error: "categoryId inválido" })
       data.categoryId = categoryId
+    }
+    const effectiveSchedule = Object.prototype.hasOwnProperty.call(data, "menuSchedule") ? data.menuSchedule : existing.menuSchedule
+    const effectivePrice = Object.prototype.hasOwnProperty.call(data, "price") ? data.price : existing.price
+    if (effectiveSchedule && effectiveSchedule !== Prisma.DbNull && effectiveSchedule.promotionalPrice !== null && Number(effectiveSchedule.promotionalPrice) >= Number(effectivePrice)) {
+      return res.status(400).json({ error: "O preço promocional deve ser menor que o preço normal" })
     }
 
     if (!req.file) {
@@ -360,7 +375,7 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
     return res.status(200).json(product)
   } catch (error) {
     console.error(error)
-    return res.status(500).json({ error: "Erro interno do servidor" })
+    return res.status(error?.status || 500).json({ error: error?.status ? error.message : "Erro interno do servidor" })
   }
 })
 
