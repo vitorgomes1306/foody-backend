@@ -54,6 +54,7 @@ model Tenant {
   whatsAppChannels           WhatsAppChannel[]
   whatsAppWebhookEvents      WhatsAppWebhookEvent[]
   whatsAppConversationStates WhatsAppConversationState[]
+  printJobs                  PrintJob[]
 }
 
 enum WhatsAppProvider {
@@ -262,14 +263,14 @@ model Product {
 }
 
 model ProductFlavor {
-  id        Int      @id @default(autoincrement())
-  productId Int
-  name      String
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  name        String
   description String?
-  price     Decimal  @db.Decimal(10, 2)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  price       Decimal  @db.Decimal(10, 2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   product       Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems    OrderItemFlavor[]
@@ -390,8 +391,29 @@ model Order {
   deliveryMan deliveryMen? @relation(fields: [deliveryManId], references: [id])
   waiter      Waiter?      @relation(fields: [waiterId], references: [id])
   items       OrderItem[]
+  printJobs   PrintJob[]
 
   @@index([tenantId, customerSessionId, createdAt])
+}
+
+model PrintJob {
+  id          Int       @id @default(autoincrement())
+  tenantId    String    @db.Uuid
+  orderId     Int
+  type        String    @default("customer_bill")
+  status      String    @default("pending")
+  requestedBy String?
+  attempts    Int       @default(0)
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  printedAt   DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
+  @@index([orderId])
 }
 
 model Waiter {

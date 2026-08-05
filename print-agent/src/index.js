@@ -1,6 +1,6 @@
 import { config, validateConfig } from './config.js'
 import { printText } from './printer.js'
-import { buildReceipt } from './receipt.js'
+import { buildCustomerBill, buildReceipt } from './receipt.js'
 import { loadState, saveState } from './state.js'
 
 let token = ''
@@ -58,13 +58,28 @@ async function poll(state) {
       for (const batch of pending) for (const key of Array.isArray(batch.key) ? batch.key : [batch.key]) state.printed.add(key)
       await saveState(state)
       console.log('Sincronização inicial concluída. Pedidos que já estavam em produção não foram impressos.')
-      return
     }
     for (const batch of pending) {
       await printText(buildReceipt(batch.order, batch.items, { addition: batch.addition }))
       for (const key of Array.isArray(batch.key) ? batch.key : [batch.key]) state.printed.add(key)
       await saveState(state)
       console.log(`[${new Date().toLocaleTimeString('pt-BR')}] Pedido #${batch.order.id}${batch.addition ? ' (complemento)' : ''} impresso.`)
+    }
+    const jobs = await request(`/api/tenant/${encodeURIComponent(config.tenantId)}/print-jobs/pending`)
+    for (const job of jobs || []) {
+      const key = `printjob:${job.id}`
+      try {
+        if (!state.printed.has(key)) {
+          await printText(buildCustomerBill(job.order))
+          state.printed.add(key)
+          await saveState(state)
+        }
+        await request(`/api/tenant/${encodeURIComponent(config.tenantId)}/print-jobs/${job.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'printed' }) })
+        console.log(`[${new Date().toLocaleTimeString('pt-BR')}] Conta do pedido #${job.orderId} impressa.`)
+      } catch (error) {
+        await request(`/api/tenant/${encodeURIComponent(config.tenantId)}/print-jobs/${job.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'failed', error: error.message }) }).catch(() => {})
+        console.error(`[${new Date().toLocaleTimeString('pt-BR')}] Falha ao imprimir conta #${job.orderId}: ${error.message}`)
+      }
     }
   } catch (error) {
     console.error(`[${new Date().toLocaleTimeString('pt-BR')}] ${error.message}`)

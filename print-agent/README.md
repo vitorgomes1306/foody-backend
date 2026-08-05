@@ -1,6 +1,6 @@
 # Chefito Print Agent
 
-Agente local que imprime automaticamente pedidos quando entram em produção. Ele também imprime novos complementos separadamente e mantém `.print-state.json` para não duplicar comandas.
+Agente local que imprime automaticamente pedidos quando entram em produção. Ele também imprime novos complementos e contas solicitadas pelos garçons, mantendo `.print-state.json` para não duplicar impressões.
 
 ## Requisitos
 
@@ -61,5 +61,6 @@ O cabeçalho usa tamanho duplo, o corpo ocupa 48 colunas com altura ampliada e o
 - Pedido original: imprime uma vez ao entrar em produção.
 - Complemento: imprime apenas os novos itens quando entram em produção.
 - Produtos marcados como “Produto pronto” não são impressos.
+- Contas solicitadas em `/{slug}/mesa` são impressas com itens, valores e total, sem fechar o pedido.
 - Na primeira execução, pedidos que já estavam em produção são apenas sincronizados. Para imprimi-los, use `PRINT_EXISTING_ON_FIRST_RUN=true` antes da primeira inicialização.
 - O arquivo `.env` contém credenciais e não deve ser compartilhado ou versionado.
