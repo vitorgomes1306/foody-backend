@@ -27,7 +27,7 @@ function parseIntOrNull(value) {
 router.get("/tenant/:tenantId/categories", authMiddleware, async (req, res) => {
   try {
     const { tenantId } = req.params
-    const allowed = await assertTenantOwner({ tenantId, userId: req.userId })
+    const allowed = (req.authRole === "waiter" && req.tenantId === tenantId) || await assertTenantOwner({ tenantId, userId: req.userId })
     if (!allowed) return res.status(403).json({ error: "Acesso negado ao tenant" })
 
     const active =
@@ -153,4 +153,3 @@ router.delete("/tenant/:tenantId/categories/:id", authMiddleware, async (req, re
 })
 
 export default router
-

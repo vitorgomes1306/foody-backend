@@ -92,7 +92,10 @@ function parseIntOrNull(value) {
 // middleware para converter preços em strings de decimal
 function parsePriceToPrismaDecimalString(value) {
   if (typeof value === "number" && Number.isFinite(value)) return String(value)
-  if (typeof value === "string" && value.trim()) return value.trim()
+  if (typeof value === "string" && value.trim()) {
+    const normalized = value.trim().replace(",", ".")
+    if (/^\d+(\.\d{1,2})?$/.test(normalized)) return normalized
+  }
   return ""
 }
 
@@ -242,7 +245,7 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
     if (!name || !price || !categoryId) {
       return res.status(400).json({ error: "Dados obrigatórios faltando" })
     }
-    if (menuSchedule?.promotionalPrice !== null && Number(menuSchedule.promotionalPrice) >= Number(price)) {
+    if (menuSchedule && menuSchedule.promotionalPrice !== null && Number(menuSchedule.promotionalPrice) >= Number(price)) {
       return res.status(400).json({ error: "O preço promocional deve ser menor que o preço normal" })
     }
 

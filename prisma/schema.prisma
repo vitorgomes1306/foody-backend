@@ -223,11 +223,12 @@ model User {
 model Category {
   id        Int      @id @default(autoincrement())
   name      String
+  iconKey   String?
   tenantId  String   @db.Uuid
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   products Product[]
 }
 

@@ -6,6 +6,7 @@ import authMiddleware from '../middlewares/auth.js';
 import { removeLocalUploads, saveLocalUpload } from '../utils/localUploads.js';
 import { getBusinessOpeningStatus } from '../utils/openingHours.js';
 import { applyPromotionalPrice, currentMenuClock, evaluateMenuSchedule } from '../utils/productMenuSchedule.js';
+import { DEFAULT_CATEGORIES } from '../utils/defaultCategories.js';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -183,6 +184,7 @@ function tenantSelect({ includeDeliveryFee, includeSettings, includePublicRelati
         id: true,
         tenantId: true,
         name: true,
+        iconKey: true,
         active: true,
         createdAt: true,
         updatedAt: true,
@@ -1005,6 +1007,15 @@ router.post(
           await prisma.tenantMedia.createMany({ data: mediaToCreate });
         }
       }
+
+      await prisma.category.createMany({
+        data: DEFAULT_CATEGORIES.map((category) => ({
+          tenantId: createdTenant.id,
+          name: category.name,
+          iconKey: category.iconKey,
+          active: true,
+        })),
+      });
 
       let tenantWithMedia;
       try {
