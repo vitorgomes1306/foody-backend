@@ -231,6 +231,7 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
 
     const name = typeof req.body?.name === "string" ? req.body.name.trim() : ""
     const description = typeof req.body?.description === "string" ? req.body.description.trim() : null
+    const barcode = typeof req.body?.barcode === "string" ? req.body.barcode.trim() : null
     const price = parsePriceToPrismaDecimalString(req.body?.price)
     const imageUrl = typeof req.body?.imageUrl === "string" ? req.body.imageUrl.trim() : null
     const categoryId = parseIntOrNull(req.body?.categoryId)
@@ -254,6 +255,7 @@ router.post("/tenant/:tenantId/products", authMiddleware, async (req, res) => {
       data: {
         name,
         description: description || null,
+        barcode: barcode || null,
         price,
         imageUrl: imageUrl || null,
         categoryId,
@@ -292,6 +294,7 @@ router.put("/tenant/:tenantId/products/:id", authMiddleware, upload.single("imag
 
     if (typeof req.body?.name === "string") data.name = req.body.name.trim()
     if (typeof req.body?.description === "string") data.description = req.body.description.trim() || null
+    if (typeof req.body?.barcode === "string") data.barcode = req.body.barcode.trim() || null
     if (typeof req.body?.price !== "undefined") {
       const price = parsePriceToPrismaDecimalString(req.body.price)
       if (!price) return res.status(400).json({ error: "Preço inválido" })

@@ -1,48 +1,22 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-06 6:29pm GMT-3
+# [foody] recent context, 2026-08-09 12:15pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (18,223t read) | 771,190t work | 98% savings
+Stats: 50 obs (19,834t read) | 837,938t work | 98% savings
 
 ### Aug 1, 2026
+S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 1 at 1:25 PM)
 S295 Fix Supabase image uploads in the foody/chefito project — credentials were empty, then the configured project was found to be unreachable (DNS ENOTFOUND). User now wants to switch to a different Supabase project. (Aug 1 at 1:25 PM)
 S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase project DNS unreachable), user wants to switch to a different/working Supabase project (Aug 1 at 1:25 PM)
 ### Aug 3, 2026
-1804 10:54p ⚖️ Customer Pizza Order Flow — Fraction + Sizes UX Redesign Requested
-1805 " ⚖️ Remove "Como deseja o produto?" Fraction Prompt — Implicit from Flavor Count
-S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 3 at 10:54 PM)
-1806 11:03p 🔵 Fraction UI Code Locations Found — Two Places in Customer-Facing Flow
-1807 11:04p 🔵 Customer Menu Product Configurator — Fraction/Flavor/Variant State and Price Logic Mapped
-1808 " ✅ Removed "Como deseja o produto?" Fraction UI from Customer Menu Configurator
-1809 11:14p 🔵 Bug Report — Payment Method Missing in Delivery Order Views
-1810 " 🔵 Payment Method Not Rendered in OrderDetailsPage or OrdersBoard Cards
-1811 " 🔵 Sidebar "Meus pedidos" badge counter not counting new orders
-1812 11:18p 🔵 OrdersSidebarItem badge hardcoded to "0" — no new-order count wired up
-1813 " 🔴 Sidebar "Meus pedidos" badge now counts new incoming orders
-1814 " 🔴 Fixed stale closure in new-order polling effect — navKey moved to a ref
-1815 11:22p 🟣 Feature request: show waiter access link on /waiters page
-1816 " 🔵 Waiter access URL pattern and slug availability for /waiters link display
-1817 " 🟣 Waiter access link card added to /waiters page
-1818 11:23p 🔴 Waiter access link card made responsive with flex-wrap layout
-1819 " 🟣 Tenant logo shown on waiter login screen and standalone header
-1820 11:25p ✅ Frontend build verified after waiter logo branding changes
-1821 11:35p 🟣 Feature request: "repeat price for all flavors" checkbox in ProductWizard prices step
-1822 " 🔵 ProductWizard prices step structure — three distinct pricing modes
-1823 11:36p 🟣 ProductWizard "same price for all flavors" state and save logic implemented
-1824 " 🟣 ProductWizard "repeat price for all flavors" checkbox UI added and verified
-1825 " 🔵 ProductFlavor and OrderItemFlavor schema structure confirmed
-1827 " 🔴 Migration Not Applied — ProductFlavor.description Column Missing in DB
-1826 11:39p 🟣 ProductFlavor description field added to schema and API
+S343 Fix TypeError on product registration in Foody project — "Cannot read properties of null (reading 'promotionalPrice')" at routes/product.js:248 (Aug 3 at 10:54 PM)
 ### Aug 4, 2026
-1828 6:45a 🔴 Prisma Migration Deployed — ProductFlavor.description Column Added to DB
-1829 7:52a ⚖️ Counter Orders: Early Payment Registration + Cancellation Feature Requested
-1830 " 🔵 Order System: paidAt Field, Cancellation Rules, and PATCH Architecture
-1831 " 🟣 Orders Board: Early Payment + Paid Order Cancellation
+1831 7:52a 🟣 Orders Board: Early Payment + Paid Order Cancellation
 1832 " 🟣 Pay Modal: Conditional Status and CSS for Paid Order Cards
 1833 " ⚖️ Two UI Fixes Requested for Early Payment Feature
 1834 7:58a 🔴 Orders Board: Finalize-Paid Confirmation Modal + "Receber agora" Icon Alignment Fix
@@ -65,6 +39,52 @@ S297 Novo produto Wizard button in /catalog — guided multi-step product creati
 1851 8:13p 🟣 Print Agent Extended with buildCustomerBill() for On-Demand Bill Printing
 1852 " 🔵 WaiterMyOrdersPage Already Has Print Button Using window.print()
 1853 " 🟣 Bill Print Button Added to WaiterMyOrdersPage — Frontend Build Passes
+### Aug 8, 2026
+1932 11:50p 🔵 NullPointerError in Foody Product Registration Route
+1933 " 🔵 Root Cause Identified: Null Guard Bug in promotionalPrice Validation
+1934 11:51p 🔵 Confirmed Bug: POST Route Missing Null Guard Unlike PUT Route at Same Validation
+1935 11:52p 🔴 Fixed TypeError on Product Creation: Added Null Guard for menuSchedule
+S344 Build a professional POS (PDV profissional) page for Foody — cashier-focused quick-sale interface showing only skipKds=true products, styled after the existing reports route layout (Aug 8 at 11:52 PM)
+### Aug 9, 2026
+1936 12:08a ⚖️ New Feature Planned: Professional POS (PDV) Interface for Foody
+1937 12:09a 🔵 Foody Frontend Architecture: Monolithic App.jsx with Pathname-Based Routing
+1938 " 🔵 Foody Frontend Design System: Inline CSS in index.html with Named Class Tokens
+1939 12:10a 🔵 Reusable Drawer and Payment Card CSS Classes Available for PDV Checkout
+1940 " 🔵 CounterOrdersPage Cart Logic and skipKds Backend Behavior Fully Mapped
+1941 " 🟣 PDV (POS) Page Feature Request for Foody Operator Dashboard
+1942 12:18a 🔵 CounterOrdersPage Full Implementation Details for PDV Reference
+1943 " 🔵 Order Creation and Payment PATCH API — Full Confirmed Flow
+1944 " 🔵 SalesDashboard CSS Classes — Complete Layout Reference for PDV
+1945 " 🔵 App.jsx Exact Insertion Points for PDV Wiring
+1946 12:19a 🔵 formatMoneyBRL Available as Shared Utility in orderFormat.js
+1947 " ⚖️ PDV Implementation Plan Finalized — Full Technical Specification
+1948 12:23a 🟣 PDV Implementation Plan Approved — Ready for Execution
+1949 12:24a 🔵 readJsonSafe Available as Shared Utility in orderNetwork.js
+1950 " 🟣 PdvPage.jsx Created — Professional POS Component for Foody Dashboard
+1951 12:25a 🔵 ProductWizard.jsx State Structure Mapped
+1952 7:17a 🔵 App.jsx Product State Architecture — Parallel Create/Edit State Pattern
+1953 " 🟣 Added barcode Field to Product Model
+1954 7:18a 🟣 Barcode Field Wired into Product API Routes (POST and PUT)
+1955 " 🟣 Barcode Field Added to Product Creation (App.jsx + ProductWizard)
+1956 7:19a 🟣 Prisma Migration Applied: add_product_barcode
+1958 7:20a 🟣 Backend Route routes/product.js Updated and Syntax-Verified for Barcode
+1957 7:21a 🟣 Frontend Build Verified After Barcode Feature Addition
+S345 Add barcode field to products in the foody restaurant management system (Aug 9 at 7:22 AM)
+**Investigated**: Examined the existing product creation flows in both App.jsx (advanced modal form) and ProductWizard.jsx (guided wizard). Reviewed the Prisma schema and migration setup. Checked package.json scripts to understand how migrations are run. Confirmed routes/product.js handles product POST/PUT operations.
 
-Access 771k tokens of past work via get_observations([IDs]) or mem-search skill.
+**Learned**: The foody project has two product creation paths: an advanced modal in App.jsx with full field control, and a guided 4-step ProductWizard. Both needed barcode support for parity. The backend uses Prisma with PostgreSQL; migrations run automatically via the `prestart` hook (`prisma migrate deploy`). The barcode field was added as optional (no uniqueness constraint) per user request for future use (e.g., PDV barcode scanning).
+
+**Completed**: - Prisma schema updated: Product model gained optional `barcode String?` field
+    - Migration `20260809010000_add_product_barcode` applied to local dev PostgreSQL database
+    - Prisma Client v5.22.0 regenerated
+    - routes/product.js updated: POST and PUT product endpoints now accept and persist `barcode`
+    - App.jsx: Added `Barcode` lucide icon import; barcode chip badge shown in product list when value exists; barcode input fields in create/edit product modal (`createProductBarcode`, `editProductBarcode` state)
+    - ProductWizard.jsx: Added `barcode` state; "Código de barras (opcional)" input field added in Step 1 (Informações); barcode included in save payload
+    - Frontend Vite build passed (1866 modules, no errors)
+    - Backend syntax check (`node --check routes/product.js`) passed
+
+**Next Steps**: Feature is complete as requested. No further work is actively planned for this feature. If extended, the next logical step would be barcode lookup/search support in the PDV (point-of-sale) module — scanning a barcode to auto-fill a product in an order.
+
+
+Access 838k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

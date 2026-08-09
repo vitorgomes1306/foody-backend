@@ -240,6 +240,7 @@ model Product {
   seq            Int
   name           String
   description    String?
+  barcode        String?
   price          Decimal  @db.Decimal(10, 2)
   imageUrl       String?
   active         Boolean  @default(true)
