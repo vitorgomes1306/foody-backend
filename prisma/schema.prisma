@@ -398,9 +398,23 @@ model Order {
   deliveryMan deliveryMen? @relation(fields: [deliveryManId], references: [id])
   waiter      Waiter?      @relation(fields: [waiterId], references: [id])
   items       OrderItem[]
+  extras      OrderExtra[]
   printJobs   PrintJob[]
 
   @@index([tenantId, customerSessionId, createdAt])
+}
+
+model OrderExtra {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
 }
 
 model PrintJob {

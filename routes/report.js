@@ -86,6 +86,7 @@ router.get('/tenant/:tenantId/reports/sales', authMiddleware, async (req, res) =
       deliveryFee: true,
       waiterCommissionPercent: true,
       notes: true,
+      extras: { orderBy: { id: 'asc' }, select: { id: true, description: true, quantity: true, unitPrice: true } },
       table: { select: { number: true } },
       items: {
         select: {
@@ -117,7 +118,24 @@ router.get('/tenant/:tenantId/reports/sales', authMiddleware, async (req, res) =
       prisma.order.findMany({ where: completedInRange(start, end), select, orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }] }),
       prisma.order.findMany({ where: completedInRange(todayStart, todayEnd), select: todaySelect, orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }] }),
     ])
-    return res.json({ period: { start, end }, summary: aggregate(periodOrders), today: aggregate(todayOrders), todayOrders })
+    const todayOrdersWithExtras = todayOrders.map((order) => ({
+      ...order,
+      items: [
+        ...(order.items || []),
+        ...(order.extras || []).map((extra) => ({
+          id: `extra-${extra.id}`,
+          productId: null,
+          quantity: extra.quantity,
+          unitPrice: extra.unitPrice,
+          product: { name: `Valor extra: ${extra.description} (${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(extra.unitPrice) || 0)} por unidade)` },
+          options: [],
+          flavors: [],
+          notes: null,
+          addedAt: null,
+        })),
+      ],
+    }))
+    return res.json({ period: { start, end }, summary: aggregate(periodOrders), today: aggregate(todayOrders), todayOrders: todayOrdersWithExtras })
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'Erro ao gerar relatório de vendas' })

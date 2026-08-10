@@ -11,6 +11,7 @@ const orderForPrint = {
   id: true, type: true, status: true, total: true, deliveryFee: true, discountAmount: true,
   paymentMethodType: true, paidAt: true, notes: true, customerName: true, customerAddress: true, createdAt: true,
   tenant: { select: { name: true, phone: true } }, table: { select: { number: true } }, waiter: { select: { name: true } },
+  extras: { orderBy: { id: 'asc' }, select: { description: true, quantity: true, unitPrice: true } },
   items: { orderBy: { id: 'asc' }, select: {
     id: true, quantity: true, unitPrice: true, notes: true, variantNameApplied: true,
     product: { select: { name: true } },

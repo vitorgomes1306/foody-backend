@@ -203,6 +203,7 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
         },
       },
     },
+    extras: { orderBy: { id: "asc" }, select: { id: true, description: true, quantity: true, unitPrice: true, createdAt: true } },
   }
 }
 
@@ -816,7 +817,7 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
     try {
       existing = await prisma.order.findFirst({
         where: { tenantId, id, ...(isWaiterRequest ? { waiterId: req.waiterId } : {}) },
-        select: { id: true, status: true, type: true, total: true, waiterId: true, paymentMethodType: true, paidAt: true },
+        select: { id: true, status: true, type: true, total: true, deliveryFee: true, waiterId: true, paymentMethodType: true, paidAt: true },
       })
     } catch (err) {
       if (!isMissingAnyOrderColumns(err)) throw err
@@ -825,7 +826,7 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
     if (!existing) return res.status(404).json({ error: "Pedido não encontrado" })
 
     if (isWaiterRequest) {
-      const allowedFields = new Set(["status", "paymentMethodType", "waiterCommissionPercent", "waiterCommissionAddedToTotal"])
+      const allowedFields = new Set(["status", "paymentMethodType", "extras", "waiterCommissionPercent", "waiterCommissionAddedToTotal"])
       const hasForbiddenField = Object.keys(req.body || {}).some((key) => !allowedFields.has(key))
       const isOwnCancellation = req.body?.status === "cancelled" && Object.keys(req.body || {}).every((key) => key === "status")
       if (hasForbiddenField || (!isOwnCancellation && (req.body?.status !== "delivered" || typeof req.body?.paymentMethodType !== "string"))) {
@@ -847,10 +848,36 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
     }
 
     const data = {}
+    let extrasToCreate = null
+    let extrasTotalCents = null
     if (typeof req.body?.notes === "string") data.notes = req.body.notes.trim() || null
     if (typeof req.body?.customerName === "string") data.customerName = req.body.customerName.trim() || null
     if (typeof req.body?.customerPhone === "string") data.customerPhone = req.body.customerPhone.trim() || null
     if (typeof req.body?.customerAddress === "string") data.customerAddress = req.body.customerAddress.trim() || null
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "extras")) {
+      if (existing.paidAt || ["delivered", "cancelled", "returned"].includes(existing.status)) return res.status(409).json({ error: "Não é possível alterar acréscimos de um pedido finalizado" })
+      if (!Array.isArray(req.body.extras) || req.body.extras.length > 50) return res.status(400).json({ error: "Acréscimos inválidos" })
+      extrasToCreate = []
+      extrasTotalCents = 0n
+      for (const extra of req.body.extras) {
+        const description = typeof extra?.description === "string" ? extra.description.trim() : ""
+        const quantity = parseIntOrNull(extra?.quantity)
+        const unitPrice = parsePriceToDecimalString(extra?.unitPrice)
+        if (!description || description.length > 160) return res.status(400).json({ error: "Informe uma descrição válida para o acréscimo" })
+        if (!quantity || quantity < 1 || quantity > 999) return res.status(400).json({ error: "Quantidade do acréscimo inválida" })
+        if (unitPrice === null || Number(unitPrice) < 0) return res.status(400).json({ error: "Valor do acréscimo inválido" })
+        const unitCents = decimalStringToCents(unitPrice)
+        extrasTotalCents += (unitCents ?? 0n) * BigInt(quantity)
+        extrasToCreate.push({ description, quantity, unitPrice })
+      }
+      const orderWithItems = await prisma.order.findFirst({
+        where: { tenantId, id },
+        select: { items: { select: { quantity: true, unitPrice: true, options: { select: { quantity: true, priceAdded: true } } } } },
+      })
+      const itemCents = calculateItemsTotalCentsFromOrder(orderWithItems)
+      const deliveryFeeCents = decimalStringToCents(existing.deliveryFee?.toString?.() ?? String(existing.deliveryFee ?? "0")) ?? 0n
+      data.total = centsToDecimalString(itemCents + deliveryFeeCents + extrasTotalCents)
+    }
     if (typeof req.body?.deliveryFee !== "undefined") {
       const fee = parsePriceToDecimalString(req.body.deliveryFee)
       if (fee === null) return res.status(400).json({ error: "deliveryFee inválido" })
@@ -897,7 +924,7 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
       const commissionPercent = parsePriceToDecimalString(req.body?.waiterCommissionPercent ?? "0")
       if (discount === null || Number(discount) < 0) return res.status(400).json({ error: "Desconto inválido" })
       if (commissionPercent === null || Number(commissionPercent) < 0 || Number(commissionPercent) > 100) return res.status(400).json({ error: "Comissão deve estar entre 0 e 100%" })
-      const originalCents = decimalStringToCents(existing.total?.toString?.() ?? String(existing.total ?? "0")) ?? 0n
+      const originalCents = decimalStringToCents(data.total?.toString?.() ?? existing.total?.toString?.() ?? String(existing.total ?? "0")) ?? 0n
       const discountCents = decimalStringToCents(discount) ?? 0n
       if (discountCents > originalCents) return res.status(400).json({ error: "Desconto não pode ser maior que o pedido" })
       const finalCents = originalCents - discountCents
@@ -975,7 +1002,15 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
 
     let order
     try {
-      order = await prisma.order.update({ where: { id }, data, select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }) })
+      if (extrasToCreate !== null) {
+        order = await prisma.$transaction(async (tx) => {
+          await tx.orderExtra.deleteMany({ where: { orderId: id } })
+          if (extrasToCreate.length) await tx.orderExtra.createMany({ data: extrasToCreate.map((extra) => ({ ...extra, orderId: id })) })
+          return tx.order.update({ where: { id }, data, select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }) })
+        })
+      } else {
+        order = await prisma.order.update({ where: { id }, data, select: orderSelect({ includeStatusChangedAt: true, includeDelivery: true }) })
+      }
     } catch (err) {
       if (!isMissingAnyOrderColumns(err)) throw err
       const fallbackData = { ...data }

@@ -81,6 +81,14 @@ export function buildCustomerBill(order) {
     if (clean(item.notes)) output.push(`  OBS: ${clean(item.notes)}`)
     output.push(`${' '.repeat(Math.max(1, width - money(lineTotal).length))}${money(lineTotal)}`)
   }
+  if (order.extras?.length) {
+    output.push(line(), 'VALORES EXTRAS')
+    for (const extra of order.extras) {
+      const quantity = Math.max(1, Number(extra.quantity) || 1)
+      const extraTotal = quantity * (Number(extra.unitPrice) || 0)
+      output.push(`${quantity}x ${clean(extra.description)}`, `${' '.repeat(Math.max(1, width - money(extraTotal).length))}${money(extraTotal)}`)
+    }
+  }
   if (clean(order.notes)) output.push(line(), `OBS. PEDIDO: ${clean(order.notes)}`)
   if (Number(order.deliveryFee) > 0) output.push(line(), `TAXA DE ENTREGA: ${money(order.deliveryFee)}`)
   if (Number(order.discountAmount) > 0) output.push(`DESCONTO: -${money(order.discountAmount)}`)
