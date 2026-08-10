@@ -128,6 +128,9 @@ function isMissingAnyOrderColumns(err) {
     isMissingOrderColumn(err, "waiterCommissionPercent") ||
     isMissingOrderColumn(err, "waiterCommissionAmount") ||
     isMissingOrderColumn(err, "waiterCommissionAddedToTotal")
+    || isMissingOrderColumn(err, "cancellationFee")
+    || isMissingOrderColumn(err, "cancellationPaymentMethodType")
+    || isMissingOrderColumn(err, "cancellationFeePaidAt")
     || isMissingOrderColumn(err, "customerSessionId")
     || isMissingOrderColumn(err, "variantId")
     || isMissingOrderColumn(err, "variantNameApplied")
@@ -147,6 +150,9 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
     status: true,
     ...(includeStatusChangedAt ? { statusChangedAt: true } : {}),
     total: true,
+    cancellationFee: true,
+    cancellationPaymentMethodType: true,
+    cancellationFeePaidAt: true,
     ...(includeDelivery
       ? {
           deliveryFee: true,
@@ -192,7 +198,7 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
             optionId: true,
             quantity: true,
             priceAdded: true,
-            option: true,
+            option: { include: { group: { select: { id: true, name: true } } } },
           },
         },
       },
@@ -673,23 +679,28 @@ router.post("/tenant/:tenantId/orders/:id/items", authMiddleware, async (req, re
       }, 0n)
       return sum + (unitPrice + optionPrice) * BigInt(item.quantity)
     }, 0n)
+    let hasKdsAddition = false
     await prisma.$transaction(async (tx) => {
       for (const item of built.data.itemsToCreate) {
         const product = await tx.product.findUnique({ where: { id: item.productId }, select: { skipKds: true } })
         const fractionProduct = item.fractionProductId ? await tx.product.findUnique({ where: { id: item.fractionProductId }, select: { skipKds: true } }) : null
         const isReady = Boolean(product?.skipKds && (!fractionProduct || fractionProduct.skipKds))
+        if (!isReady) hasKdsAddition = true
         await tx.orderItem.create({
           data: {
             ...item,
             orderId: id,
-            kitchenStatus: isReady ? "ready" : built.data.initialStatus === "preparing" ? "preparing" : "pending",
+            kitchenStatus: isReady ? "ready" : ["preparing", "ready"].includes(existing.status) || built.data.initialStatus === "preparing" ? "preparing" : "pending",
             addedAt: new Date(),
           },
         })
       }
       await tx.order.update({
         where: { id },
-        data: { total: centsToDecimalString(currentTotalCents + addedTotalCents) },
+        data: {
+          total: centsToDecimalString(currentTotalCents + addedTotalCents),
+          ...(hasKdsAddition && existing.status === "ready" ? { status: "preparing", statusChangedAt: new Date() } : {}),
+        },
       })
     })
 
@@ -845,6 +856,20 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
       if (fee === null) return res.status(400).json({ error: "deliveryFee inválido" })
       data.deliveryFee = fee
     }
+    if (typeof req.body?.cancellationFee !== "undefined") {
+      const fee = parsePriceToDecimalString(req.body.cancellationFee)
+      if (fee === null || Number(fee) < 0) return res.status(400).json({ error: "Taxa de cancelamento inválida" })
+      data.cancellationFee = fee
+      if (Number(fee) > 0) {
+        const method = parsePaymentMethodType(req.body?.cancellationPaymentMethodType)
+        if (!method) return res.status(400).json({ error: "Informe a forma de pagamento da taxa de cancelamento" })
+        data.cancellationPaymentMethodType = method
+        data.cancellationFeePaidAt = new Date()
+      } else {
+        data.cancellationPaymentMethodType = null
+        data.cancellationFeePaidAt = null
+      }
+    }
     if (typeof req.body?.deliveryManId !== "undefined") {
       const deliveryManId = parseIntOrNull(req.body.deliveryManId)
       if (!deliveryManId) return res.status(400).json({ error: "deliveryManId inválido" })
@@ -956,6 +981,9 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
       const fallbackData = { ...data }
       delete fallbackData.statusChangedAt
       delete fallbackData.deliveryFee
+      delete fallbackData.cancellationFee
+      delete fallbackData.cancellationPaymentMethodType
+      delete fallbackData.cancellationFeePaidAt
       delete fallbackData.deliveryManId
       delete fallbackData.waiterId
       delete fallbackData.paymentMethodType

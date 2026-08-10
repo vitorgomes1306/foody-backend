@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-09 12:15pm GMT-3
+# [foody] recent context, 2026-08-09 5:02pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,834t read) | 837,938t work | 98% savings
+Stats: 50 obs (19,735t read) | 837,719t work | 98% savings
 
 ### Aug 1, 2026
 S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 1 at 1:25 PM)
@@ -17,8 +17,6 @@ S296 Fix Supabase image uploads in foody/chefito — root cause found (Supabase 
 S343 Fix TypeError on product registration in Foody project — "Cannot read properties of null (reading 'promotionalPrice')" at routes/product.js:248 (Aug 3 at 10:54 PM)
 ### Aug 4, 2026
 1831 7:52a 🟣 Orders Board: Early Payment + Paid Order Cancellation
-1832 " 🟣 Pay Modal: Conditional Status and CSS for Paid Order Cards
-1833 " ⚖️ Two UI Fixes Requested for Early Payment Feature
 1834 7:58a 🔴 Orders Board: Finalize-Paid Confirmation Modal + "Receber agora" Icon Alignment Fix
 1835 7:47p ⚖️ Header: Company Name UI Improvement + Auto-Accept Orders Toggle Requested
 1836 " 🔵 Auto-Accept Orders Toggle: Existing Implementation Found in Tenant Settings
@@ -70,21 +68,8 @@ S344 Build a professional POS (PDV profissional) page for Foody — cashier-focu
 1958 7:20a 🟣 Backend Route routes/product.js Updated and Syntax-Verified for Barcode
 1957 7:21a 🟣 Frontend Build Verified After Barcode Feature Addition
 S345 Add barcode field to products in the foody restaurant management system (Aug 9 at 7:22 AM)
-**Investigated**: Examined the existing product creation flows in both App.jsx (advanced modal form) and ProductWizard.jsx (guided wizard). Reviewed the Prisma schema and migration setup. Checked package.json scripts to understand how migrations are run. Confirmed routes/product.js handles product POST/PUT operations.
-
-**Learned**: The foody project has two product creation paths: an advanced modal in App.jsx with full field control, and a guided 4-step ProductWizard. Both needed barcode support for parity. The backend uses Prisma with PostgreSQL; migrations run automatically via the `prestart` hook (`prisma migrate deploy`). The barcode field was added as optional (no uniqueness constraint) per user request for future use (e.g., PDV barcode scanning).
-
-**Completed**: - Prisma schema updated: Product model gained optional `barcode String?` field
-    - Migration `20260809010000_add_product_barcode` applied to local dev PostgreSQL database
-    - Prisma Client v5.22.0 regenerated
-    - routes/product.js updated: POST and PUT product endpoints now accept and persist `barcode`
-    - App.jsx: Added `Barcode` lucide icon import; barcode chip badge shown in product list when value exists; barcode input fields in create/edit product modal (`createProductBarcode`, `editProductBarcode` state)
-    - ProductWizard.jsx: Added `barcode` state; "Código de barras (opcional)" input field added in Step 1 (Informações); barcode included in save payload
-    - Frontend Vite build passed (1866 modules, no errors)
-    - Backend syntax check (`node --check routes/product.js`) passed
-
-**Next Steps**: Feature is complete as requested. No further work is actively planned for this feature. If extended, the next logical step would be barcode lookup/search support in the PDV (point-of-sale) module — scanning a barcode to auto-fill a product in an order.
-
+1986 10:05a 🟣 PDV UI: Remove header, relocate clear-cart button next to customer name input
+1987 12:16p ✅ PDV UI refactor build confirmed clean — header removal + clear-cart relocation shipped
 
 Access 838k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

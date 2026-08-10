@@ -18,7 +18,11 @@ function itemLines(item) {
   const lines = [`${item.quantity || 1}x ${clean(item?.product?.name || 'Produto')}${item?.variantNameApplied ? ` (${clean(item.variantNameApplied)})` : ''}`]
   const flavors = Array.isArray(item?.flavors) ? item.flavors : []
   if (flavors.length) lines.push(`  ${flavors.map((flavor) => `${flavors.length > 1 ? '1/2 ' : ''}${clean(flavor.nameApplied || flavor.flavor?.name)}`).join(' + ')}`)
-  for (const selected of item?.options || []) lines.push(`  + ${selected.quantity || 1}x ${clean(selected.option?.name || 'Adicional')}`)
+  for (const selected of item?.options || []) {
+    const groupName = clean(selected.option?.group?.name)
+    const optionName = clean(selected.option?.name || 'Adicional')
+    lines.push(`  + ${groupName ? `${groupName}: ` : ''}${selected.quantity || 1}x ${optionName}`)
+  }
   if (clean(item?.notes)) lines.push(`  OBS: ${clean(item.notes)}`)
   return lines
 }
@@ -69,7 +73,11 @@ export function buildCustomerBill(order) {
     const lineTotal = ((Number(item.unitPrice) || 0) + optionsTotal) * quantity
     output.push(`${quantity}x ${clean(item?.product?.name || 'Produto')}${item.variantNameApplied ? ` (${clean(item.variantNameApplied)})` : ''}`)
     for (const flavor of item.flavors || []) output.push(`  ${item.flavors.length > 1 ? '1/2 ' : ''}${clean(flavor.nameApplied)}`)
-    for (const option of item.options || []) output.push(`  + ${option.quantity || 1}x ${clean(option.option?.name || 'Adicional')} ${money((Number(option.priceAdded) || 0) * (option.quantity || 1))}`)
+    for (const option of item.options || []) {
+      const groupName = clean(option.option?.group?.name)
+      const optionName = clean(option.option?.name || 'Adicional')
+      output.push(`  + ${groupName ? `${groupName}: ` : ''}${option.quantity || 1}x ${optionName} ${money((Number(option.priceAdded) || 0) * (option.quantity || 1))}`)
+    }
     if (clean(item.notes)) output.push(`  OBS: ${clean(item.notes)}`)
     output.push(`${' '.repeat(Math.max(1, width - money(lineTotal).length))}${money(lineTotal)}`)
   }

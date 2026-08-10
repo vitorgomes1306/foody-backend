@@ -15,7 +15,7 @@ const orderForPrint = {
     id: true, quantity: true, unitPrice: true, notes: true, variantNameApplied: true,
     product: { select: { name: true } },
     flavors: { orderBy: { id: 'asc' }, select: { nameApplied: true } },
-    options: { orderBy: { id: 'asc' }, select: { quantity: true, priceAdded: true, option: { select: { name: true } } } },
+    options: { orderBy: { id: 'asc' }, select: { quantity: true, priceAdded: true, option: { select: { name: true, group: { select: { name: true } } } } } },
   } },
 }
 

@@ -372,6 +372,9 @@ model Order {
   statusChangedAt              DateTime           @default(now())
   total                        Decimal            @db.Decimal(10, 2)
   deliveryFee                  Decimal            @default(0) @db.Decimal(10, 2)
+  cancellationFee              Decimal            @default(0) @db.Decimal(10, 2)
+  cancellationPaymentMethodType PaymentMethodType?
+  cancellationFeePaidAt        DateTime?
   deliveryManId                Int?
   deliveryCancelledAt          DateTime?
   waiterId                     Int?
