@@ -208,6 +208,7 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(user)
+  plan      Plan     @default(master)
   active    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -519,6 +520,12 @@ enum Role {
   user
   admin
   tenant
+}
+
+enum Plan {
+  lite
+  basic
+  master
 }
 
 enum OrderType {

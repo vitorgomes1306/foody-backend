@@ -4,13 +4,18 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const router = express.Router();
+const VALID_PLANS = new Set(['lite', 'basic', 'master']);
 
 router.post('/users', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, plan } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Dados obrigatórios faltando' });
+    }
+
+    if (!VALID_PLANS.has(plan)) {
+      return res.status(400).json({ error: 'Selecione um plano válido' });
     }
 
     const userExists = await prisma.user.findFirst({
@@ -28,6 +33,7 @@ router.post('/users', async (req, res) => {
         name,
         email,
         password: hashedPassword,
+        plan,
         active: true,
       },
     });
