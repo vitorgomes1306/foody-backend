@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-22 9:22am GMT-3
+# [foody] recent context, 2026-08-22 10:05am GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (20,017t read) | 526,095t work | 96% savings
+Stats: 50 obs (19,788t read) | 391,729t work | 95% savings
 
 ### Aug 1, 2026
 S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 1 at 1:25 PM)
@@ -21,25 +21,8 @@ S344 Build a professional POS (PDV profissional) page for Foody — cashier-focu
 S345 Add barcode field to products in the foody restaurant management system (Aug 9 at 12:09 AM)
 ### Aug 21, 2026
 S381 Add subscription plan selection (Lite/Básico/Master) to user registration in the Foody/Chefito SaaS platform (Aug 21 at 8:22 AM)
-2511 9:34p 🔴 Android APK Build Fixed: JAVA_HOME Required for Gradle Wrapper on macOS
 ### Aug 22, 2026
-2512 6:39a 🔵 Android 15 Edge-to-Edge Enforcement Causes Status Bar Overlap in Capacitor Apps
-2513 " 🔵 Capacitor Android Project Baseline: Missing Edge-to-Edge and Font Scale Fixes
-2514 " 🔴 Capacitor MainActivity: Fixed Status Bar Overlap and Font Scale
-2515 6:40a 🔴 APK Rebuilt Successfully with UI Fixes: Font Scale and Status Bar
-2516 " 🔵 ViewCompat Inset Listener on WebView Insufficient for Capacitor Edge-to-Edge Fix
-2517 6:41a 🔴 Capacitor Inset Fix: Moved to WebView Parent Container with Margin Layout Params
-2518 " 🔵 Second Inset Patch Silently Failed: Git Diff Shows Original Code Still in Place
-2519 6:54a 🔴 Third APK Build: Parent Container Inset Fix Successfully Compiled
-2520 " ✅ New APK with Parent Container Inset Fix: SHA256 Confirmed Changed
-2521 7:07a 🔵 CHEFITO/Foody Project Structure and Existing Schema
-2522 " ⚖️ Subscription System Architecture Decision: Stripe with Provider Abstraction
-2523 7:08a 🔵 Frontend App.jsx Routing and Auth Architecture
-2524 " 🔵 Plan Prices Hardcoded in Login.jsx Registration Form
-2525 " ✅ Stripe SDK Installed in Backend
-2526 7:09a 🟣 Billing Schema Added: BillingSettings and Subscription Models
-2527 " 🟣 Billing Utility Layer and Stripe Provider Abstraction Implemented
-2528 " 🟣 Billing API Routes and Subscription Access Middleware Integrated into Express Server
+2527 7:09a 🟣 Billing Utility Layer and Stripe Provider Abstraction Implemented
 2529 7:11a 🔄 Subscription Access Check Moved Into authMiddleware
 2530 7:12a 🟣 Frontend Subscription Pages Implemented
 2531 " 🟣 Subscription Pages Integrated into App.jsx Routing
@@ -72,6 +55,23 @@ S381 Add subscription plan selection (Lite/Básico/Master) to user registration 
 2558 " 🔵 Full Build Validation Passes — Backend and Frontend Both Compile Successfully
 2559 " 🟣 Sicoob Webhook Auto-Configuration Endpoint Added
 2560 " 🟣 Admin UI Gets "Configurar webhook Pix" Button for Sicoob
+2561 9:22a 🔵 User Has A1 PFX Certificate for Sicoob — Needs Base64 Conversion for Railway
+2562 9:31a 🔵 Production Errors on First Test — Checkout 500, Webhook Setup 502, Login 400
+2563 9:32a 🔵 Backend Commit "Integracao Sicoob" Already Pushed to origin/main — Network Unavailable from Agent
+2564 " 🔵 railway logs Command Produced No Output — CLI Likely Not Authenticated or Network Blocked
+2566 " 🔵 Critical Bug: Sicoob Webhook GET Route Returns 404 — Route Not Registered Correctly
+2567 9:33a 🔵 User Pasted Railway Logs — But These Are PostgreSQL Logs, Not Backend App Logs
+2568 " 🔵 Root Cause Found: "mac verify failure" — Wrong PFX Password in SICOOB_CERTIFICATE_PASSWORD
+2565 " 🔵 Railway CLI OAuth Token Expired — Cannot Fetch Logs from Agent
+2569 9:45a 🔵 Second TLS Error: "unsupported" — PFX Certificate Uses Algorithm Incompatible with Node.js OpenSSL
+2570 9:48a 🔵 Sicoob A1 Certificate Located at certificado/ Folder in Project Root
+2571 9:49a 🚨 Real Sicoob Certificate NOT in .gitignore — Untracked but Exposed Risk
+2572 " ✅ certificado/ Added to .gitignore — Production Certificate Protected from Accidental Commit
+2573 " 🔵 Sicoob A1 Certificate Successfully Extracted — ICP-Brasil, Valid Until Dec 2026, Cert-Key Pair Verified
+2574 9:50a 🔵 Railway CLI Browserless Login Initiated — Awaiting User Auth at railway.com/activate
+2575 " 🔵 Railway CLI Successfully Authenticated as Vitor Gomes — Ready for Variable Updates
+2576 9:51a 🔵 Railway Project Structure Identified — foody-backend Service ID Confirmed
+2577 " 🔵 railway variable set --stdin Flag Available — Critical for Large Base64 Certificate Values
 
-Access 526k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 392k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

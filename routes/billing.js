@@ -221,12 +221,29 @@ router.patch('/billing/admin/settings', authMiddleware, requireAdmin, async (req
 router.get('/billing/admin/customers', authMiddleware, requireAdmin, async (_req, res) => {
   const users = await prisma.user.findMany({
     where: { isAdmin: false },
-    select: { id: true, name: true, email: true, plan: true, createdAt: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      plan: true,
+      createdAt: true,
+      subscriptions: {
+        where: { status: 'paid' },
+        orderBy: { paidAt: 'desc' },
+        take: 50,
+        select: { id: true, plan: true, provider: true, amount: true, currency: true, paymentMethod: true, paidAt: true, startsAt: true, endsAt: true },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   });
   const result = await Promise.all(users.map(async (user) => {
     const access = await getBillingAccess(user.id);
-    return { ...user, subscriptions: undefined, billing: serializeBillingAccess(access) };
+    return {
+      ...user,
+      payments: user.subscriptions.map((payment) => ({ ...payment, amount: String(payment.amount) })),
+      subscriptions: undefined,
+      billing: serializeBillingAccess(access),
+    };
   }));
   return res.json(result);
 });
