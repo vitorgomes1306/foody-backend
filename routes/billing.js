@@ -218,6 +218,78 @@ router.patch('/billing/admin/settings', authMiddleware, requireAdmin, async (req
   return res.json({ message: 'Configurações salvas', updatedAt: settings.updatedAt });
 });
 
+router.get('/billing/admin/dashboard', authMiddleware, requireAdmin, async (_req, res) => {
+  const now = new Date();
+  // O negócio opera no horário de Fortaleza (UTC-3).
+  const localNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+  const monthStart = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), 1, 3));
+  const nextMonthStart = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth() + 1, 1, 3));
+  const expiringLimit = addDays(now, 7);
+
+  const [settings, users, paidSubscriptions, monthlyReceipts] = await Promise.all([
+    getBillingSettings(),
+    prisma.user.findMany({
+      where: { isAdmin: false },
+      select: { id: true, name: true, email: true, plan: true },
+    }),
+    prisma.subscription.findMany({
+      where: { status: 'paid', endsAt: { not: null } },
+      orderBy: [{ userId: 'asc' }, { endsAt: 'desc' }],
+      select: { id: true, userId: true, plan: true, amount: true, endsAt: true },
+    }),
+    prisma.subscription.aggregate({
+      where: { status: 'paid', paidAt: { gte: monthStart, lt: nextMonthStart } },
+      _sum: { amount: true },
+      _count: { id: true },
+    }),
+  ]);
+
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  const latestByUser = new Map();
+  for (const subscription of paidSubscriptions) {
+    if (!latestByUser.has(subscription.userId)) latestByUser.set(subscription.userId, subscription);
+  }
+
+  let activeSubscriptionValue = 0;
+  let activeCustomers = 0;
+  const expiring = [];
+  for (const subscription of latestByUser.values()) {
+    const customer = usersById.get(subscription.userId);
+    if (!customer || !subscription.endsAt) continue;
+    const graceEndsAt = addDays(subscription.endsAt, settings.postExpirationGraceDays);
+    if (graceEndsAt > now) {
+      activeCustomers += 1;
+      activeSubscriptionValue += Number(subscription.amount);
+    }
+    if (subscription.endsAt > now && subscription.endsAt <= expiringLimit) {
+      expiring.push({
+        id: subscription.id,
+        customerId: customer.id,
+        customerName: customer.name,
+        email: customer.email,
+        plan: subscription.plan,
+        amount: String(subscription.amount),
+        endsAt: subscription.endsAt.toISOString(),
+      });
+    }
+  }
+  expiring.sort((a, b) => new Date(a.endsAt) - new Date(b.endsAt));
+
+  const customersByPlan = { lite: 0, basic: 0, master: 0 };
+  for (const user of users) customersByPlan[user.plan] = (customersByPlan[user.plan] || 0) + 1;
+
+  return res.json({
+    month: monthStart.toISOString().slice(0, 7),
+    monthlyReceipts: { total: String(monthlyReceipts._sum.amount || 0), count: monthlyReceipts._count.id },
+    totalCustomers: users.length,
+    activeCustomers,
+    activeSubscriptionValue: activeSubscriptionValue.toFixed(2),
+    customersByPlan,
+    expiring,
+    expiringWindowDays: 7,
+  });
+});
+
 router.get('/billing/admin/customers', authMiddleware, requireAdmin, async (_req, res) => {
   const users = await prisma.user.findMany({
     where: { isAdmin: false },
