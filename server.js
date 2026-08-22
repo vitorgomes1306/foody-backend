@@ -24,6 +24,7 @@ import whatsappRoutes from './routes/whatsapp.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhook.js';
 import addressRoutes from './routes/address.js';
 import printJobRoutes from './routes/printJob.js';
+import billingRoutes from './routes/billing.js';
 
 
 
@@ -48,6 +49,7 @@ app.use(whatsappWebhookRoutes);
 app.use('/api', addressRoutes);
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
+app.use('/api', billingRoutes);
 app.use('/api', tenantRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', productRoutes);

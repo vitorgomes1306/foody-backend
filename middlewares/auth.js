@@ -1,8 +1,9 @@
 // importa o jwt para verificar tokens
 import jwt from 'jsonwebtoken';
+import { getBillingAccess, serializeBillingAccess } from '../utils/billing.js';
 
 // middleware para verificar tokens
-export function authMiddleware(req, res, next) {
+export async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   // verifica se há token no header
@@ -22,6 +23,18 @@ export function authMiddleware(req, res, next) {
     req.tenantId = decoded.tenantId;
     req.waiterId = decoded.waiterId;
     req.authRole = decoded.role || 'user';
+
+    const billingExempt = req.path === '/profile' || req.path.startsWith('/billing');
+    if (req.authRole !== 'waiter' && !billingExempt) {
+      const access = await getBillingAccess(req.userId);
+      if (!access.allowed) {
+        return res.status(402).json({
+          error: 'Assinatura necessária para continuar',
+          code: 'SUBSCRIPTION_REQUIRED',
+          billing: serializeBillingAccess(access),
+        });
+      }
+    }
 
     next();
   } catch (error) {

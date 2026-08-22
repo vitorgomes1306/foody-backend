@@ -37,7 +37,7 @@ router.post('/login', async (req, res) => {
         }
 
         // remove senha da resposta
-        const { password: _, ...userWithoutPassword } = user;
+        const { password: _, billingCustomerId: _billingCustomerId, billingTrialStartedAt: _billingTrialStartedAt, ...userWithoutPassword } = user;
 
         if (!process.env.JWT_SECRET) {
             console.error('JWT_SECRET não está configurado no ambiente');

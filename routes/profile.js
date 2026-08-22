@@ -18,7 +18,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Usuário não encontrado' });
         }
         // remove senha
-        const { password, ...userWithoutPassword } = user;
+        const { password, billingCustomerId, billingTrialStartedAt, ...userWithoutPassword } = user;
 
         return res.status(200).json(userWithoutPassword);
     

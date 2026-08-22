@@ -23,6 +23,7 @@
     "prisma": "^5.0.0",
     "serverless-http": "^4.0.0",
     "slugify": "^1.6.8",
+    "stripe": "^22.5.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

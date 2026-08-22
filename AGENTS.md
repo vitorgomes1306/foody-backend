@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-21 11:33am GMT-3
+# [foody] recent context, 2026-08-22 7:07am GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,993t read) | 829,452t work | 98% savings
+Stats: 50 obs (19,901t read) | 2,149,974t work | 99% savings
 
 ### Aug 1, 2026
 S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 1 at 1:25 PM)
@@ -19,50 +19,9 @@ S343 Fix TypeError on product registration in Foody project — "Cannot read pro
 S344 Build a professional POS (PDV profissional) page for Foody — cashier-focused quick-sale interface showing only skipKds=true products, styled after the existing reports route layout (Aug 8 at 11:52 PM)
 ### Aug 9, 2026
 S345 Add barcode field to products in the foody restaurant management system (Aug 9 at 12:09 AM)
-### Aug 16, 2026
-2302 7:32a 🟣 Global Dark Theme Applied to All Foody/Chefito Views
-2305 " 🔵 `:root` CSS custom property token rule incorrectly scoped as descendant selector
-2306 12:57p 🔵 Confirmed: `[data-theme="dark"] :root` descendant bug present in index.html
-2307 12:58p 🔴 Fixed invalid `:root` descendant selector — dark mode CSS tokens now correctly scoped
-2308 " ✅ Dark mode hardcoded as default by adding `data-theme="dark"` to `<html>` element
-2309 " 🔵 `data-theme="dark"` attribute not present on `<html>` despite previous edit claim
-2311 " 🔵 Missing /companies Route and Header Company Selector Dropdown
-2310 1:01p 🔵 Dark mode CSS infrastructure fully verified — `data-theme="dark"` active on HTML root
-2312 1:06p 🟣 Missing /companies route and header company dropdown identified
-2315 1:16p 🔄 TenantSwitcher badge colors migrated to CSS custom properties
-2313 1:36p 🔵 CompaniesPage and TenantSwitcher components already exist in App.jsx
-2314 1:37p 🔵 iFood Merchant API — Architecture and Endpoints Mapped
 ### Aug 21, 2026
-2443 8:20a 🔵 Foody Project Structure: Registration & Plan Feature Scope
-2444 8:21a 🔵 Foody Registration Flow: Full Stack Architecture Mapped
-2445 " 🔵 JWT Contains Only userId — Plan Enforcement Requires DB Lookup
-2446 " 🔵 frontend/ Uses Inline CSS in index.html; frontend-chefito/ Uses Tailwind + shadcn
-2447 " 🟣 Subscription Plan Selection Added to Registration Flow (Full Stack)
 S381 Add subscription plan selection (Lite/Básico/Master) to user registration in the Foody/Chefito SaaS platform (Aug 21 at 8:22 AM)
-2448 8:25a ⚖️ frontend-chefito/ Excluded from Active Development Scope
-2449 " 🔵 frontend-chefito/ Renamed to frontend-inativo/; Frontend Plan UI Patch Did Not Apply
-2450 " 🟣 Prisma Schema Valid and Prisma Client Regenerated; frontend/ Build Passes
-2451 8:26a 🟣 Plan Selection UI Confirmed Applied to Active Frontend; Full Stack Feature Complete
-2452 " 🔵 SVG React Import Bug: vite-plugin-svgr Missing from Vite Config
-2453 9:10a 🔴 SVG React Import Broken: vite-plugin-svgr Not Installed, BikeDeliveryIcon Unusable
-2454 " 🔴 vite-plugin-svgr Installed in frontend/ to Fix SVG React Component Import
-2455 9:11a 🔴 SVG React Import Fixed: vite-plugin-svgr Registered in Vite Config and BikeDeliveryIcon Props Corrected
-2456 " 🔴 frontend/ Build Passes With SVG Fix — 1868 Modules, No Errors
-2457 9:16a 🟣 Subscription Plan Prices Added to Registration UI
-2458 9:21a ⚖️ Lite Plan Gets Dedicated Mobile-Only Frontend with Desktop Block
-2459 " 🔵 App.jsx Architecture Mapped for Lite Frontend Extraction
-2460 9:22a 🔵 Profile API Returns plan Field; App.jsx Can Route Lite Users After Login
-2461 9:23a 🔵 apply_patch Rejects Multiple Update File Blocks Targeting the Same File
-2462 " 🟣 Lite Frontend Foundation: Constants, isMobileAccess() and Lucide Icon Imports Added to App.jsx
-2463 9:24a 🟣 Lite Frontend: DashboardLayout Gets isLite Prop, Route Blocking, and WhatsApp Polling Disabled
-2464 " ⚖️ Lite Plan: Remove KDS, add dark-theme mobile production view
-2465 9:39a 🔵 OrdersBoard API and data model for Lite production screen
-2467 " 🟣 New LiteOrdersPage component for Lite plan production orders
-2466 9:40a 🔵 Orders API supports status/type filters; OrdersBoard polls every 5s
-2468 " 🔵 App.jsx patch failed: LITE_BLOCKED_ROUTES already modified
-2469 " 🔵 Exact App.jsx state before Lite KDS removal patch
 2470 9:41a 🟣 Lite plan App.jsx wired: KDS removed, LiteOrdersPage integrated, bottom nav updated
-2471 " 🔵 No existing dark theme in index.html — needs fresh dark CSS block
 2472 9:42a 🟣 Lite plan dark theme CSS applied to index.html
 2473 " 🟣 Lite dark theme + LiteOrdersPage build verified clean
 2474 9:43a 🔄 Cleanup: removed unused ChefHat import and added color-scheme:dark to Lite shell
@@ -72,6 +31,47 @@ S381 Add subscription plan selection (Lite/Básico/Master) to user registration 
 2478 9:46a 🟣 Glassmorphism build verified — Lite plan CSS complete
 2479 9:49a ⚖️ ProductWizard component needs dark theme for Lite plan
 2480 " 🔵 ProductWizard, CategorySelect, ProductMenuScheduleFields CSS classes mapped for dark theming
+2481 9:50a 🟣 OrderDetailsPage: Lite Mode Action Bar + Payment Modal
+2482 " 🟣 Lite Mode CSS: OrderDetailsActions + LitePaymentModal Dark Glass Styles
+2483 " 🟣 SalesDashboard: isLite Prop Hides Waiter/Commission Features
+2484 " 🟣 SalesDashboard Lite: Full Dark-Glass Mobile CSS in index.html
+2485 " 🔵 apply_patch Idempotency Issue: Repeated Patch Applications in Same Session
+2486 1:56p 🔵 Git Push Pending After Successful Rebase on frontend Repo
+2487 2:02p 🔵 Dual-Repo Structure Confirmed: Frontend Push Still Pending
+2488 2:04p 🔵 Theme Architecture: Three Independent useThemeToggle Contexts
+2489 " 🟣 Theme-Aware Logo Switching in Sidebar and Login
+2491 " ⚖️ Lite Mode Requirements for /companies Route
+2490 2:05p 🟣 Theme-Aware Logo Build Verified — New Uncommitted Changes on Top of Unpushed Commit
+2492 2:10p 🟣 CompaniesPage Lite mode: entire "Configurações" card hidden
+2493 2:17p 🟣 CompaniesPage Lite: entire "Configurações" card hidden, not just checkbox
+2495 " 🔵 Bluetooth direct printing: Web Bluetooth API vs window.print() trade-offs
+2497 " 🔵 Existing print-agent architecture: polling Node.js agent with ESC/POS and PrintJob queue
+2494 2:18p 🟣 CompaniesPage Lite mode: final structure verified, build passes
+2499 2:29p 🔵 Mobile app has direct Bluetooth printer access; desktop web version requires print-agent
+2496 " 🔵 Native Bluetooth printing: platform APIs investigated for direct thermal printer access
+2500 2:31p 🟣 CatalogPage product edit form: mobile responsiveness needed for Lite mode
+2498 2:32p 🔵 Print-agent full architecture: dual polling loop, ESC/POS generation, two print modes
+2501 3:24p 🔴 CatalogPage Lite — FlavorManager button layout fix
+2502 3:29p 🔵 FlavorManager row layout — CSS selector too broad
+2503 " 🔴 FlavorManager refactored to fix Lite mobile button layout
+2504 3:30p 🟣 FlavorManager Lite dark CSS added to index.html
+2506 " ⚖️ FlavorManager row layout: all 5 elements inline (single row)
+2507 " 🟣 Foody/Chefito Lite: Android APK debug compilado com sucesso via Capacitor
+2508 " 🟣 ChefitoPrinterPlugin: Plugin nativo Android para impressora Bluetooth ESC/POS
+2509 " 🟣 Capacitor configurado no frontend foody com scripts de build Android
+2505 " ✅ Frontend build passes with FlavorManager + catalog Lite mobile changes
+2510 5:11p 🔴 Android APK UI Fixes: Font Scale and Status Bar Overlap
+2511 9:34p 🔴 Android APK Build Fixed: JAVA_HOME Required for Gradle Wrapper on macOS
+### Aug 22, 2026
+2512 6:39a 🔵 Android 15 Edge-to-Edge Enforcement Causes Status Bar Overlap in Capacitor Apps
+2513 " 🔵 Capacitor Android Project Baseline: Missing Edge-to-Edge and Font Scale Fixes
+2514 " 🔴 Capacitor MainActivity: Fixed Status Bar Overlap and Font Scale
+2515 6:40a 🔴 APK Rebuilt Successfully with UI Fixes: Font Scale and Status Bar
+2516 " 🔵 ViewCompat Inset Listener on WebView Insufficient for Capacitor Edge-to-Edge Fix
+2517 6:41a 🔴 Capacitor Inset Fix: Moved to WebView Parent Container with Margin Layout Params
+2518 " 🔵 Second Inset Patch Silently Failed: Git Diff Shows Original Code Still in Place
+2519 6:54a 🔴 Third APK Build: Parent Container Inset Fix Successfully Compiled
+2520 " ✅ New APK with Parent Container Inset Fix: SHA256 Confirmed Changed
 
-Access 829k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 2150k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
