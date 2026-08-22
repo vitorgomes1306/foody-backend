@@ -3,6 +3,7 @@ import authMiddleware from '../middlewares/auth.js';
 import { addDays, billingPrisma as prisma, getBillingAccess, getBillingSettings, serializeBillingAccess } from '../utils/billing.js';
 import { getBillingProvider } from '../billing/providers/index.js';
 import { constructStripeEvent, stripeConfigurationStatus } from '../billing/providers/stripe.js';
+import { configureSicoobWebhook, getSicoobCharge, sicoobConfigurationStatus } from '../billing/providers/sicoob.js';
 
 const router = express.Router();
 const VALID_PLANS = new Set(['lite', 'basic', 'master']);
@@ -20,8 +21,7 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
-async function activatePaidSubscription(checkoutSession) {
-  const subscriptionId = checkoutSession?.metadata?.chefitoSubscriptionId;
+async function activatePaidSubscription(subscriptionId, payment = {}) {
   if (!subscriptionId) return;
   await prisma.$transaction(async (tx) => {
     const subscription = await tx.subscription.findUnique({ where: { id: subscriptionId } });
@@ -40,8 +40,8 @@ async function activatePaidSubscription(checkoutSession) {
       where: { id: subscription.id },
       data: {
         status: 'paid',
-        providerPaymentId: typeof checkoutSession.payment_intent === 'string' ? checkoutSession.payment_intent : null,
-        paymentMethod: checkoutSession.payment_method_types?.[0] || null,
+        providerPaymentId: payment.providerPaymentId || null,
+        paymentMethod: payment.paymentMethod || null,
         startsAt,
         endsAt,
         graceEndsAt,
@@ -51,16 +51,39 @@ async function activatePaidSubscription(checkoutSession) {
   });
 }
 
+async function confirmSicoobCharge(txid) {
+  const subscription = await prisma.subscription.findFirst({ where: { provider: 'sicoob', providerCheckoutId: txid } });
+  if (!subscription) return { confirmed: false, reason: 'not_found' };
+  if (subscription.status === 'paid') return { confirmed: true, subscriptionId: subscription.id };
+  const charge = await getSicoobCharge(txid);
+  if (String(charge?.status || '').toUpperCase() !== 'CONCLUIDA') return { confirmed: false, reason: 'pending' };
+  const expectedCents = Math.round(Number(subscription.amount) * 100);
+  const receivedCents = Math.round(Number(charge?.valor?.original) * 100);
+  if (!Number.isFinite(receivedCents) || receivedCents !== expectedCents) throw new Error('Valor confirmado pelo Sicoob diverge da assinatura');
+  const receivedPix = Array.isArray(charge?.pix) ? charge.pix[0] : null;
+  await activatePaidSubscription(subscription.id, {
+    providerPaymentId: receivedPix?.endToEndId || txid,
+    paymentMethod: 'pix',
+  });
+  return { confirmed: true, subscriptionId: subscription.id };
+}
+
 router.post('/billing/webhooks/stripe', async (req, res) => {
   try {
     const signature = req.get('stripe-signature');
     if (!signature || !req.rawBody) return res.status(400).json({ error: 'Assinatura do webhook ausente' });
     const event = constructStripeEvent(req.rawBody, signature);
     if (event.type === 'checkout.session.completed' && event.data.object.payment_status === 'paid') {
-      await activatePaidSubscription(event.data.object);
+      await activatePaidSubscription(event.data.object?.metadata?.chefitoSubscriptionId, {
+        providerPaymentId: typeof event.data.object.payment_intent === 'string' ? event.data.object.payment_intent : null,
+        paymentMethod: event.data.object.payment_method_types?.[0] || null,
+      });
     }
     if (event.type === 'checkout.session.async_payment_succeeded') {
-      await activatePaidSubscription(event.data.object);
+      await activatePaidSubscription(event.data.object?.metadata?.chefitoSubscriptionId, {
+        providerPaymentId: typeof event.data.object.payment_intent === 'string' ? event.data.object.payment_intent : null,
+        paymentMethod: event.data.object.payment_method_types?.[0] || null,
+      });
     }
     if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
       const checkoutId = event.data.object.id;
@@ -73,6 +96,15 @@ router.post('/billing/webhooks/stripe', async (req, res) => {
   }
 });
 
+router.post(['/billing/webhooks/sicoob', '/billing/webhooks/sicoob/pix'], async (req, res) => {
+  const received = Array.isArray(req.body?.pix) ? req.body.pix : [];
+  await Promise.allSettled(received.filter((item) => item?.txid).map(async (item) => {
+    try { await confirmSicoobCharge(item.txid); }
+    catch (error) { console.error('Erro ao confirmar webhook Sicoob:', error.message); }
+  }));
+  return res.status(200).json({ received: true });
+});
+
 router.get('/billing/status', authMiddleware, async (req, res) => {
   const access = await getBillingAccess(req.userId);
   return res.json(serializeBillingAccess(access));
@@ -81,6 +113,18 @@ router.get('/billing/status', authMiddleware, async (req, res) => {
 router.get('/billing/history', authMiddleware, async (req, res) => {
   const rows = await prisma.subscription.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 20 });
   return res.json(rows.map((row) => ({ ...row, amount: String(row.amount) })));
+});
+
+router.post('/billing/sicoob/sync/:subscriptionId', authMiddleware, async (req, res) => {
+  try {
+    const subscription = await prisma.subscription.findFirst({ where: { id: req.params.subscriptionId, userId: req.userId, provider: 'sicoob' } });
+    if (!subscription?.providerCheckoutId) return res.status(404).json({ error: 'Cobrança Sicoob não encontrada' });
+    const result = await confirmSicoobCharge(subscription.providerCheckoutId);
+    return res.json(result);
+  } catch (error) {
+    console.error('Erro ao sincronizar cobrança Sicoob:', error.message);
+    return res.status(502).json({ error: 'Não foi possível consultar o pagamento no Sicoob' });
+  }
 });
 
 router.post('/billing/checkout', authMiddleware, async (req, res) => {
@@ -106,9 +150,9 @@ router.post('/billing/checkout', authMiddleware, async (req, res) => {
       });
       await prisma.$transaction([
         prisma.subscription.update({ where: { id: pending.id }, data: { providerCheckoutId: checkout.checkoutId } }),
-        ...(user.billingCustomerId ? [] : [prisma.user.update({ where: { id: user.id }, data: { billingCustomerId: checkout.customerId } })]),
+        ...(!user.billingCustomerId && checkout.customerId ? [prisma.user.update({ where: { id: user.id }, data: { billingCustomerId: checkout.customerId } })] : []),
       ]);
-      return res.status(201).json({ url: checkout.url, checkoutId: checkout.checkoutId });
+      return res.status(201).json({ url: checkout.url || null, pix: checkout.pix || null, checkoutId: checkout.checkoutId, subscriptionId: pending.id });
     } catch (error) {
       await prisma.subscription.update({ where: { id: pending.id }, data: { status: 'failed' } });
       throw error;
@@ -129,11 +173,26 @@ router.get('/billing/admin/settings', authMiddleware, requireAdmin, async (_req,
     postExpirationGraceDays: settings.postExpirationGraceDays,
     subscriptionDays: settings.subscriptionDays,
     providers: [
+      { id: 'sicoob', name: 'Sicoob Pix', available: true, configuration: sicoobConfigurationStatus() },
       { id: 'stripe', name: 'Stripe', available: true, configuration: stripeConfigurationStatus() },
       { id: 'mercado_pago', name: 'Mercado Pago', available: false },
       { id: 'asaas', name: 'Asaas', available: false },
     ],
   });
+});
+
+router.post('/billing/admin/sicoob/webhook', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const configuredBase = String(process.env.API_PUBLIC_URL || '').replace(/\/$/, '');
+    const railwayBase = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '';
+    const baseUrl = configuredBase || railwayBase || `${req.protocol}://${req.get('host')}`;
+    const webhookBaseUrl = `${baseUrl}/api/billing/webhooks/sicoob`;
+    await configureSicoobWebhook(webhookBaseUrl);
+    return res.json({ message: 'Webhook Pix configurado no Sicoob', webhookBaseUrl, receivingUrl: `${webhookBaseUrl}/pix` });
+  } catch (error) {
+    console.error('Erro ao configurar webhook Sicoob:', error.message);
+    return res.status(502).json({ error: error.message || 'Não foi possível configurar o webhook Sicoob' });
+  }
 });
 
 router.patch('/billing/admin/settings', authMiddleware, requireAdmin, async (req, res) => {
@@ -151,10 +210,10 @@ router.patch('/billing/admin/settings', authMiddleware, requireAdmin, async (req
   if (![initialTrialDays, postExpirationGraceDays].every((value) => Number.isInteger(value) && value >= 0 && value <= 365)) {
     return res.status(400).json({ error: 'Os dias de carência devem estar entre 0 e 365' });
   }
-  if (req.body?.activeProvider !== 'stripe') return res.status(400).json({ error: 'Este provedor ainda não está disponível' });
+  if (!['sicoob', 'stripe'].includes(req.body?.activeProvider)) return res.status(400).json({ error: 'Este provedor ainda não está disponível' });
   const settings = await prisma.billingSettings.update({
     where: { id: 1 },
-    data: { activeProvider: 'stripe', litePrice, basicPrice, masterPrice, initialTrialDays, postExpirationGraceDays },
+    data: { activeProvider: req.body.activeProvider, litePrice, basicPrice, masterPrice, initialTrialDays, postExpirationGraceDays },
   });
   return res.json({ message: 'Configurações salvas', updatedAt: settings.updatedAt });
 });

@@ -1,7 +1,9 @@
 import { createStripeCheckout } from './stripe.js';
+import { createSicoobCheckout, getSicoobCharge } from './sicoob.js';
 
 const providers = {
   stripe: { createCheckout: createStripeCheckout },
+  sicoob: { createCheckout: createSicoobCheckout, getCharge: getSicoobCharge },
 };
 
 export function getBillingProvider(name) {

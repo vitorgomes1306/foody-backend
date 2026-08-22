@@ -227,7 +227,7 @@ model User {
 // Configuração global de cobrança. Existe uma única linha (id = 1).
 model BillingSettings {
   id                      Int      @id @default(1)
-  activeProvider          String   @default("stripe")
+  activeProvider          String   @default("sicoob")
   litePrice               Decimal  @default(29.90) @db.Decimal(10, 2)
   basicPrice              Decimal  @default(99.90) @db.Decimal(10, 2)
   masterPrice             Decimal  @default(199.90) @db.Decimal(10, 2)
