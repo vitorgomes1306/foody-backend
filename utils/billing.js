@@ -32,8 +32,16 @@ export async function getBillingAccess(userId) {
   if (latestPaid?.endsAt && latestPaid.endsAt > now) {
     return { allowed: true, reason: 'active', settings, subscription: latestPaid };
   }
-  if (latestPaid?.graceEndsAt && latestPaid.graceEndsAt > now) {
-    return { allowed: true, reason: 'renewal_grace', settings, subscription: latestPaid };
+  // A data de vencimento é a fonte da verdade. Assim, uma alteração manual em
+  // endsAt não deixa o acesso aberto por causa de um graceEndsAt antigo.
+  const effectiveGraceEndsAt = latestPaid?.endsAt
+    ? addDays(latestPaid.endsAt, settings.postExpirationGraceDays)
+    : null;
+  const subscription = latestPaid
+    ? { ...latestPaid, graceEndsAt: effectiveGraceEndsAt }
+    : null;
+  if (effectiveGraceEndsAt && effectiveGraceEndsAt > now) {
+    return { allowed: true, reason: 'renewal_grace', settings, subscription };
   }
 
   const trialEndsAt = addDays(user.billingTrialStartedAt, settings.initialTrialDays);
@@ -45,7 +53,7 @@ export async function getBillingAccess(userId) {
     allowed: false,
     reason: latestPaid ? 'subscription_expired' : 'trial_expired',
     settings,
-    subscription: latestPaid,
+    subscription,
     trialEndsAt,
   };
 }
