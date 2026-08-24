@@ -52,7 +52,7 @@ export async function notifyOrderCreated(prisma, order) {
       return `• ${item.quantity || 1}x ${item.product?.name || 'Produto'}${item.variantNameApplied ? ` (${item.variantNameApplied})` : ''}${flavors.length ? ` (${flavors.join(' + ')})` : ''}${options.length ? ` + ${options.join(', ')}` : ''}`
     })
     const text = [
-      `Olá, ${order.customerName || 'cliente'}! 👋`, `Recebemos seu pedido #${String(order.id).padStart(4, '0')} na ${company}.`, '',
+      `Olá, ${order.customerName || 'cliente'}! 👋`, `Recebemos seu pedido #${String(order.dailyNumber ?? order.id).padStart(4, '0')} na ${company}.`, '',
       ...items, '', `Total: ${money(order.total)}`, `Entrega: ${order.type === 'delivery' ? 'Delivery' : 'Retirada'}`,
       `Pagamento na entrega/retirada: ${paymentLabels[order.paymentMethodType] || 'A combinar'}`,
       `Status: ${statusLabels[order.status] || order.status}`, '', 'Avisaremos por aqui quando o status mudar.',
@@ -63,7 +63,7 @@ export async function notifyOrderCreated(prisma, order) {
 
 export async function notifyOrderStatusChanged(prisma, order) {
   try {
-    const text = [`🔔 Atualização do pedido #${String(order.id).padStart(4, '0')}`, '', `Novo status: *${statusLabels[order.status] || order.status}*`, '', order.status === 'ready' ? (order.type === 'delivery' ? 'Seu pedido está pronto e em breve seguirá para entrega.' : 'Seu pedido está pronto para retirada!') : order.status === 'out_for_delivery' ? 'Seu pedido está a caminho! 🛵' : order.status === 'delivered' ? 'Pedido concluído. Agradecemos pela preferência! 😊' : 'Continuaremos avisando por aqui.'].join('\n')
+    const text = [`🔔 Atualização do pedido #${String(order.dailyNumber ?? order.id).padStart(4, '0')}`, '', `Novo status: *${statusLabels[order.status] || order.status}*`, '', order.status === 'ready' ? (order.type === 'delivery' ? 'Seu pedido está pronto e em breve seguirá para entrega.' : 'Seu pedido está pronto para retirada!') : order.status === 'out_for_delivery' ? 'Seu pedido está a caminho! 🛵' : order.status === 'delivered' ? 'Pedido concluído. Agradecemos pela preferência! 😊' : 'Continuaremos avisando por aqui.'].join('\n')
     await sendEvolutionText(prisma, order, text)
   } catch (error) { console.error(`Falha ao notificar status do pedido #${order?.id}:`, error.message) }
 }

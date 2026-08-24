@@ -134,7 +134,29 @@ function isMissingAnyOrderColumns(err) {
     || isMissingOrderColumn(err, "customerSessionId")
     || isMissingOrderColumn(err, "variantId")
     || isMissingOrderColumn(err, "variantNameApplied")
+    || isMissingOrderColumn(err, "dailyNumber")
   )
+}
+
+const BRAZIL_OFFSET_MS = 3 * 60 * 60 * 1000
+
+function brazilDateOnly(date = new Date()) {
+  const shifted = new Date(date.getTime() - BRAZIL_OFFSET_MS)
+  return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()))
+}
+
+async function nextDailyOrderNumber(tx, tenantId) {
+  try {
+    const counter = await tx.orderDailyCounter.upsert({
+      where: { tenantId_date: { tenantId, date: brazilDateOnly() } },
+      create: { tenantId, date: brazilDateOnly(), lastNumber: 1 },
+      update: { lastNumber: { increment: 1 } },
+      select: { lastNumber: true },
+    })
+    return counter.lastNumber
+  } catch {
+    return null
+  }
 }
 
 function orderSelect({ includeStatusChangedAt, includeDelivery }) {
@@ -171,6 +193,7 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
     customerName: true,
     customerPhone: true,
     customerAddress: true,
+    dailyNumber: true,
     createdAt: true,
     updatedAt: true,
     table: true,
@@ -518,6 +541,8 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
             ).id
           : null
 
+      const dailyNumber = await nextDailyOrderNumber(tx, tenantId)
+
       const createArgs = {
         data: {
           tenantId,
@@ -534,6 +559,7 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
           customerAddress: built.data.customerAddress,
           paymentMethodType: built.data.paymentMethodType,
           customerSessionId: built.data.customerSessionId,
+          dailyNumber,
           items: { create: built.data.itemsToCreate },
         },
       }
@@ -551,6 +577,7 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
         delete fallbackCreateArgs.data.waiterId
         delete fallbackCreateArgs.data.paymentMethodType
         delete fallbackCreateArgs.data.customerSessionId
+        delete fallbackCreateArgs.data.dailyNumber
         return await tx.order.create({ ...fallbackCreateArgs, select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }) })
       }
     })
@@ -763,6 +790,8 @@ router.post("/tenant/:tenantId/orders", authMiddleware, async (req, res) => {
             ).id
           : null
 
+      const dailyNumber = await nextDailyOrderNumber(tx, tenantId)
+
       const createArgs = {
         data: {
           tenantId,
@@ -777,6 +806,7 @@ router.post("/tenant/:tenantId/orders", authMiddleware, async (req, res) => {
           customerName: built.data.customerName,
           customerPhone: built.data.customerPhone,
           customerAddress: built.data.customerAddress,
+          dailyNumber,
           items: { create: built.data.itemsToCreate },
         },
       }
@@ -792,6 +822,7 @@ router.post("/tenant/:tenantId/orders", authMiddleware, async (req, res) => {
         delete fallbackCreateArgs.data.deliveryFee
         delete fallbackCreateArgs.data.statusChangedAt
         delete fallbackCreateArgs.data.waiterId
+        delete fallbackCreateArgs.data.dailyNumber
         return await tx.order.create({ ...fallbackCreateArgs, select: orderSelect({ includeStatusChangedAt: false, includeDelivery: false }) })
       }
     })

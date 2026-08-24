@@ -434,6 +434,7 @@ model Order {
   customerPhone                 String?
   customerAddress               String?
   customerSessionId             String?
+  dailyNumber                   Int?
   createdAt                     DateTime           @default(now())
   updatedAt                     DateTime           @updatedAt
 
@@ -447,6 +448,15 @@ model Order {
   printJobs   PrintJob[]
 
   @@index([tenantId, customerSessionId, createdAt])
+}
+
+// Contador auxiliar para gerar o número diário do pedido (reinicia a cada dia por tenant)
+model OrderDailyCounter {
+  tenantId   String   @db.Uuid
+  date       DateTime @db.Date
+  lastNumber Int      @default(0)
+
+  @@id([tenantId, date])
 }
 
 model OrderExtra {

@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [foody] recent context, 2026-08-22 11:26am GMT-3
+# [foody] recent context, 2026-08-23 4:15pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,788t read) | 391,729t work | 95% savings
+Stats: 50 obs (20,440t read) | 550,708t work | 96% savings
 
 ### Aug 1, 2026
 S297 Novo produto Wizard button in /catalog — guided multi-step product creation modal with sizes, flavors, fractions, and pricing matrix (Aug 1 at 1:25 PM)
@@ -22,18 +22,7 @@ S345 Add barcode field to products in the foody restaurant management system (Au
 ### Aug 21, 2026
 S381 Add subscription plan selection (Lite/Básico/Master) to user registration in the Foody/Chefito SaaS platform (Aug 21 at 8:22 AM)
 ### Aug 22, 2026
-2527 7:09a 🟣 Billing Utility Layer and Stripe Provider Abstraction Implemented
-2529 7:11a 🔄 Subscription Access Check Moved Into authMiddleware
-2530 7:12a 🟣 Frontend Subscription Pages Implemented
-2531 " 🟣 Subscription Pages Integrated into App.jsx Routing
-2532 " 🟣 App.jsx Billing Status Polling and Forced Subscription Block Screen
-2533 " ✅ Backend and Frontend Builds Pass Successfully
-2534 7:13a 🔵 Stripe Environment Variables Not Yet Configured in .env
-2535 " 🔐 billingCustomerId Stripped from Login and Profile API Responses
-2536 " 🟣 billingTrialStartedAt Field Added for Independent Trial Clock
-2537 " ✅ Final Validation: All Builds and Checks Pass After Billing System Implementation
-2538 8:49a 🚨 Live Stripe Secret Key Committed to .env.billing.example — GitHub Push Blocked
-2539 " 🔵 Git State: Billing System in Unpushed Commit with Leaked Secrets in .env.billing.example
+2539 8:49a 🔵 Git State: Billing System in Unpushed Commit with Leaked Secrets in .env.billing.example
 2540 " 🔵 Git Index Lock Error Prevented Commit Amend
 2541 " 🔴 Stripe Credentials Removed from Git History via Commit Amend
 2542 8:50a 🔵 Production Deployment Infrastructure Confirmed: Railway (Backend) + Vercel (Frontend)
@@ -72,6 +61,17 @@ S381 Add subscription plan selection (Lite/Básico/Master) to user registration 
 2575 " 🔵 Railway CLI Successfully Authenticated as Vitor Gomes — Ready for Variable Updates
 2576 9:51a 🔵 Railway Project Structure Identified — foody-backend Service ID Confirmed
 2577 " 🔵 railway variable set --stdin Flag Available — Critical for Large Base64 Certificate Values
+2578 " 🔴 Billing grace period now computed dynamically from endsAt
+2579 " 🔴 User no longer needs to re-login after payment is confirmed
+2580 " 🟣 Admin subscriptions page redesign requested: tabs + billing dashboard
+2581 11:27a 🟣 New GET /billing/admin/dashboard endpoint with billing KPIs
+2582 " 🔵 AdminSubscriptionsPage current structure before tab refactor
+2583 11:28a 🔵 apply_patch rejects Delete+Add on same file in single patch
+2584 " 🔵 apply_patch Delete+Add same-file error persists even after prior deletion
+2585 " 🟣 AdminSubscriptionsPage rebuilt with 3-tab layout and financial dashboard
+2586 11:30a 🟣 AdminSubscriptionsPage final version with sub-components successfully written
+2587 " 🟣 SubscriptionPage.css extended with tab nav, metrics grid, dashboard layout, and plan breakdown styles
+2588 " ✅ Admin billing dashboard feature build verified clean
 
-Access 392k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 551k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

@@ -11,7 +11,8 @@ const destination = (order) => {
   if (order?.table?.number) return `MESA ${order.table.number}`
   const customer = clean(order?.customerName)
   if (order?.type === 'delivery') return customer ? `DELIVERY - ${customer}` : 'DELIVERY'
-  return customer || (order?.type === 'pickup' ? 'RETIRADA' : 'BALCAO')
+  if (order?.type === 'pickup') return customer ? `RETIRADA - ${customer}` : 'RETIRADA'
+  return customer ? `BALCAO - ${customer}` : 'BALCAO'
 }
 
 function itemLines(item) {
@@ -35,7 +36,7 @@ export function buildReceipt(order, items, { addition = false } = {}) {
     center('PRODUCAO'),
     center(addition ? '*** COMPLEMENTO ***' : 'NOVO PEDIDO'),
     line('='),
-    `PEDIDO #${String(order.id).padStart(4, '0')}`,
+    `PEDIDO #${String(order.dailyNumber ?? order.id).padStart(4, '0')}`,
     destination(order),
     order.waiter?.name ? `GARCOM: ${clean(order.waiter.name)}` : '',
     `CRIADO: ${createdAt}`,
@@ -47,7 +48,7 @@ export function buildReceipt(order, items, { addition = false } = {}) {
     output.push(...itemLines(item))
   })
   if (clean(order.notes)) output.push(line(), `OBS. PEDIDO: ${clean(order.notes)}`)
-  output.push(line('='), center('FIM DO PEDIDO'), '', '', '')
+  output.push(line('='), center('FIM DO PEDIDO - by Chetito'), '', '', '')
   return output.join('\n')
 }
 
@@ -59,7 +60,7 @@ export function buildCustomerBill(order) {
     center(clean(order?.tenant?.name) || 'EMPRESA'),
     center('CONTA PARA CONFERENCIA'),
     line('='),
-    `PEDIDO #${String(order.id).padStart(4, '0')}`,
+    `PEDIDO #${String(order.dailyNumber ?? order.id).padStart(4, '0')}`,
     destination(order),
     order.waiter?.name ? `GARCOM: ${clean(order.waiter.name)}` : '',
     `ABERTO: ${createdAt}`,

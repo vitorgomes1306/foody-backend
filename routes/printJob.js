@@ -8,7 +8,7 @@ const parseId = (value) => { const id = Number.parseInt(value, 10); return Numbe
 const ownsTenant = async (tenantId, userId) => Boolean(await prisma.tenant.findFirst({ where: { id: tenantId, ownerId: userId }, select: { id: true } }))
 
 const orderForPrint = {
-  id: true, type: true, status: true, total: true, deliveryFee: true, discountAmount: true,
+  id: true, dailyNumber: true, type: true, status: true, total: true, deliveryFee: true, discountAmount: true,
   paymentMethodType: true, paidAt: true, notes: true, customerName: true, customerAddress: true, createdAt: true,
   tenant: { select: { name: true, phone: true } }, table: { select: { number: true } }, waiter: { select: { name: true } },
   extras: { orderBy: { id: 'asc' }, select: { description: true, quantity: true, unitPrice: true } },

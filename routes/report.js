@@ -74,7 +74,7 @@ router.get('/tenant/:tenantId/reports/sales', authMiddleware, async (req, res) =
     if (end.getTime() - start.getTime() > 366 * 86400000) return res.status(400).json({ error: 'O período máximo é de 366 dias' })
 
     const select = {
-      id: true, type: true, waiterId: true, total: true, discountAmount: true, waiterCommissionAmount: true, paymentMethodType: true, createdAt: true, paidAt: true,
+      id: true, dailyNumber: true, type: true, waiterId: true, total: true, discountAmount: true, waiterCommissionAmount: true, paymentMethodType: true, createdAt: true, paidAt: true,
       waiter: { select: { id: true, name: true } },
       items: { select: { productId: true, quantity: true, unitPrice: true, product: { select: { name: true } }, options: { select: { quantity: true, priceAdded: true } } } },
     }
