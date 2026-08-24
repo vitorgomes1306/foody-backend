@@ -623,7 +623,13 @@ router.get("/tenant/:tenantId/orders", authMiddleware, async (req, res) => {
     const type = typeof req.query.type === "string" ? parseOrderType(req.query.type) : null
     if (typeof req.query.type === "string" && !type) return res.status(400).json({ error: "type inválido" })
 
-    const accessWhere = { tenantId, ...(req.authRole === "waiter" ? { waiterId: req.waiterId } : {}) }
+    const start = typeof req.query.start === "string" ? new Date(req.query.start) : null
+    if (typeof req.query.start === "string" && Number.isNaN(start?.getTime())) return res.status(400).json({ error: "start inválido" })
+    const end = typeof req.query.end === "string" ? new Date(req.query.end) : null
+    if (typeof req.query.end === "string" && Number.isNaN(end?.getTime())) return res.status(400).json({ error: "end inválido" })
+
+    const createdAtWhere = start || end ? { createdAt: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) } } : {}
+    const accessWhere = { tenantId, ...(req.authRole === "waiter" ? { waiterId: req.waiterId } : {}), ...createdAtWhere }
     let orders
     try {
       orders = await prisma.order.findMany({
