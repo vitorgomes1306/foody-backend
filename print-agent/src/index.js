@@ -1,7 +1,10 @@
 import { config, validateConfig } from './config.js'
 import { printText } from './printer.js'
-import { buildCustomerBill, buildReceipt } from './receipt.js'
+import { buildCustomerBill, buildPaymentReceipt, buildReceipt } from './receipt.js'
 import { loadState, saveState } from './state.js'
+
+const printJobBuilders = { customer_bill: buildCustomerBill, payment_receipt: buildPaymentReceipt }
+const printJobLabels = { customer_bill: 'Conta', payment_receipt: 'Recibo' }
 
 let token = ''
 let running = false
@@ -68,17 +71,19 @@ async function poll(state) {
     const jobs = await request(`/api/tenant/${encodeURIComponent(config.tenantId)}/print-jobs/pending`)
     for (const job of jobs || []) {
       const key = `printjob:${job.id}`
+      const buildText = printJobBuilders[job.type] || buildCustomerBill
+      const label = printJobLabels[job.type] || 'Conta'
       try {
         if (!state.printed.has(key)) {
-          await printText(buildCustomerBill(job.order))
+          await printText(buildText(job.order))
           state.printed.add(key)
           await saveState(state)
         }
         await request(`/api/tenant/${encodeURIComponent(config.tenantId)}/print-jobs/${job.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'printed' }) })
-        console.log(`[${new Date().toLocaleTimeString('pt-BR')}] Conta do pedido #${job.orderId} impressa.`)
+        console.log(`[${new Date().toLocaleTimeString('pt-BR')}] ${label} do pedido #${job.orderId} impressa.`)
       } catch (error) {
         await request(`/api/tenant/${encodeURIComponent(config.tenantId)}/print-jobs/${job.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'failed', error: error.message }) }).catch(() => {})
-        console.error(`[${new Date().toLocaleTimeString('pt-BR')}] Falha ao imprimir conta #${job.orderId}: ${error.message}`)
+        console.error(`[${new Date().toLocaleTimeString('pt-BR')}] Falha ao imprimir ${label.toLowerCase()} #${job.orderId}: ${error.message}`)
       }
     }
   } catch (error) {

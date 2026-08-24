@@ -54,19 +54,10 @@ export function buildReceipt(order, items, { addition = false } = {}) {
 
 const money = (value) => `R$ ${(Number(value) || 0).toFixed(2).replace('.', ',')}`
 
-export function buildCustomerBill(order) {
-  const createdAt = new Date(order.createdAt || Date.now()).toLocaleString('pt-BR')
-  const output = [
-    center(clean(order?.tenant?.name) || 'EMPRESA'),
-    center('CONTA PARA CONFERENCIA'),
-    line('='),
-    `PEDIDO #${String(order.dailyNumber ?? order.id).padStart(4, '0')}`,
-    destination(order),
-    order.waiter?.name ? `GARCOM: ${clean(order.waiter.name)}` : '',
-    `ABERTO: ${createdAt}`,
-    line(),
-  ].filter(Boolean)
+const paymentLabels = { cash: 'Dinheiro', pix: 'PIX', debit_card: 'Cartao de Debito', credit_card: 'Cartao de Credito' }
 
+function itemsAndExtrasLines(order) {
+  const output = []
   for (const [index, item] of (order.items || []).entries()) {
     if (index) output.push(line())
     const quantity = Math.max(1, Number(item.quantity) || 1)
@@ -90,10 +81,50 @@ export function buildCustomerBill(order) {
       output.push(`${quantity}x ${clean(extra.description)}`, `${' '.repeat(Math.max(1, width - money(extraTotal).length))}${money(extraTotal)}`)
     }
   }
+  return output
+}
+
+export function buildCustomerBill(order) {
+  const createdAt = new Date(order.createdAt || Date.now()).toLocaleString('pt-BR')
+  const output = [
+    center(clean(order?.tenant?.name) || 'EMPRESA'),
+    center('CONTA PARA CONFERENCIA'),
+    line('='),
+    `PEDIDO #${String(order.dailyNumber ?? order.id).padStart(4, '0')}`,
+    destination(order),
+    order.waiter?.name ? `GARCOM: ${clean(order.waiter.name)}` : '',
+    `ABERTO: ${createdAt}`,
+    line(),
+  ].filter(Boolean)
+
+  output.push(...itemsAndExtrasLines(order))
   if (clean(order.notes)) output.push(line(), `OBS. PEDIDO: ${clean(order.notes)}`)
   if (Number(order.deliveryFee) > 0) output.push(line(), `TAXA DE ENTREGA: ${money(order.deliveryFee)}`)
   if (Number(order.discountAmount) > 0) output.push(`DESCONTO: -${money(order.discountAmount)}`)
   output.push(line('='), `TOTAL: ${money(order.total)}`, line('='))
   output.push(center(order.paidAt ? 'PAGAMENTO REGISTRADO' : 'PAGAMENTO PENDENTE'), center('NAO E DOCUMENTO FISCAL'), '', '', '')
+  return output.join('\n')
+}
+
+export function buildPaymentReceipt(order) {
+  const paidAt = new Date(order.paidAt || Date.now()).toLocaleString('pt-BR')
+  const output = [
+    center(clean(order?.tenant?.name) || 'EMPRESA'),
+    center('RECIBO DE PAGAMENTO'),
+    line('='),
+    `PEDIDO #${String(order.dailyNumber ?? order.id).padStart(4, '0')}`,
+    destination(order),
+    order.waiter?.name ? `GARCOM: ${clean(order.waiter.name)}` : '',
+    `PAGO EM: ${paidAt}`,
+    line(),
+  ].filter(Boolean)
+
+  output.push(...itemsAndExtrasLines(order))
+  if (clean(order.notes)) output.push(line(), `OBS. PEDIDO: ${clean(order.notes)}`)
+  if (Number(order.deliveryFee) > 0) output.push(line(), `TAXA DE ENTREGA: ${money(order.deliveryFee)}`)
+  if (Number(order.discountAmount) > 0) output.push(`DESCONTO: -${money(order.discountAmount)}`)
+  output.push(line('='), `TOTAL PAGO: ${money(order.total)}`, line('='))
+  output.push(`FORMA DE PAGAMENTO: ${paymentLabels[order.paymentMethodType] || 'Nao informada'}`)
+  output.push(center('PAGAMENTO CONFIRMADO'), center('NAO E DOCUMENTO FISCAL'), '', '', '')
   return output.join('\n')
 }

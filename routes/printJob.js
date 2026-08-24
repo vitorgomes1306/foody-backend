@@ -6,6 +6,7 @@ const prisma = new PrismaClient()
 const router = express.Router()
 const parseId = (value) => { const id = Number.parseInt(value, 10); return Number.isFinite(id) && id > 0 ? id : null }
 const ownsTenant = async (tenantId, userId) => Boolean(await prisma.tenant.findFirst({ where: { id: tenantId, ownerId: userId }, select: { id: true } }))
+const PRINT_JOB_TYPES = new Set(['customer_bill', 'payment_receipt'])
 
 const orderForPrint = {
   id: true, dailyNumber: true, type: true, status: true, total: true, deliveryFee: true, discountAmount: true,
@@ -25,12 +26,14 @@ router.post('/tenant/:tenantId/orders/:orderId/print-jobs', authMiddleware, asyn
     const { tenantId } = req.params
     const orderId = parseId(req.params.orderId)
     if (!orderId) return res.status(400).json({ error: 'Pedido inválido' })
+    const type = PRINT_JOB_TYPES.has(req.body?.type) ? req.body.type : 'customer_bill'
     const waiterRequest = req.authRole === 'waiter' && req.tenantId === tenantId
     if (!waiterRequest && !(await ownsTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado à empresa' })
     const order = await prisma.order.findFirst({ where: { id: orderId, tenantId, ...(waiterRequest ? { waiterId: req.waiterId } : {}) }, select: { id: true, status: true } })
     if (!order) return res.status(404).json({ error: 'Pedido não encontrado' })
-    if (['cancelled', 'returned'].includes(order.status)) return res.status(409).json({ error: 'Não é possível imprimir a conta de um pedido cancelado' })
-    const job = await prisma.printJob.create({ data: { tenantId, orderId, type: 'customer_bill', requestedBy: waiterRequest ? `waiter:${req.waiterId}` : `user:${req.userId}` } })
+    if (['cancelled', 'returned'].includes(order.status)) return res.status(409).json({ error: 'Não é possível imprimir um pedido cancelado' })
+    if (type === 'payment_receipt' && order.status !== 'delivered') return res.status(409).json({ error: 'O recibo só pode ser impresso após o pedido ser finalizado' })
+    const job = await prisma.printJob.create({ data: { tenantId, orderId, type, requestedBy: waiterRequest ? `waiter:${req.waiterId}` : `user:${req.userId}` } })
     return res.status(201).json(job)
   } catch (error) { console.error(error); return res.status(500).json({ error: 'Erro ao solicitar impressão' }) }
 })
