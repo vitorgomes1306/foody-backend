@@ -75,7 +75,7 @@ async function poll(state) {
       const label = printJobLabels[job.type] || 'Conta'
       try {
         if (!state.printed.has(key)) {
-          await printText(buildText(job.order))
+          await printText(buildText(job.order), { doubleHeight: false })
           state.printed.add(key)
           await saveState(state)
         }

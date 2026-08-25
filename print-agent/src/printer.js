@@ -25,7 +25,7 @@ const ESC = 0x1b
 const GS = 0x1d
 const ascii = (value) => Buffer.from(String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x0A\x0D\x20-\x7E]/g, '?'), 'ascii')
 
-function escPosDocument(text) {
+function escPosDocument(text, { doubleHeight = config.bodyDoubleHeight } = {}) {
   const rows = String(text).split(/\r?\n/)
   const chunks = [Buffer.from([ESC, 0x40]), Buffer.from([ESC, 0x4d, 0x00]), Buffer.from([ESC, 0x61, 0x00])]
   rows.forEach((row, index) => {
@@ -37,21 +37,21 @@ function escPosDocument(text) {
       chunks.push(Buffer.from([ESC, 0x61, 0x01, ESC, 0x45, 0x01]), ascii(`${row.trim()}\n`), Buffer.from([ESC, 0x45, 0x00, ESC, 0x61, 0x00]))
       return
     }
-    chunks.push(Buffer.from([GS, 0x21, config.bodyDoubleHeight ? 0x01 : 0x00]), ascii(`${row}\n`))
+    chunks.push(Buffer.from([GS, 0x21, doubleHeight ? 0x01 : 0x00]), ascii(`${row}\n`))
   })
   chunks.push(Buffer.from([GS, 0x21, 0x00, ESC, 0x64, 0x04]))
   if (config.autoCut) chunks.push(Buffer.from([GS, 0x56, 0x42, 0x00]))
   return Buffer.concat(chunks)
 }
 
-export async function printText(text) {
+export async function printText(text, options = {}) {
   if (config.printMode === 'preview') {
     console.log(`\n${'='.repeat(config.paperWidth)}\n${text}\n${'='.repeat(config.paperWidth)}\n`)
     return
   }
 
   const filePath = path.join(os.tmpdir(), `chefito-${process.pid}-${Date.now()}.txt`)
-  await fs.writeFile(filePath, escPosDocument(text))
+  await fs.writeFile(filePath, escPosDocument(text, options))
   try {
     if (process.platform === 'win32') {
       const scriptPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'windows-raw-print.ps1')

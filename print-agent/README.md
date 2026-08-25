@@ -54,7 +54,7 @@ AUTO_CUT=true
 PRINT_MODE=system
 ```
 
-O cabeçalho usa tamanho duplo, o corpo ocupa 48 colunas com altura ampliada e o corte automático é solicitado ao final.
+O cabeçalho usa tamanho duplo. `BODY_DOUBLE_HEIGHT` controla apenas o corpo da comanda de produção (cozinha); a conta para conferência e o recibo de pagamento sempre imprimem o corpo em altura normal, para economizar papel. O corte automático é solicitado ao final.
 
 ## Regras
 
@@ -62,5 +62,6 @@ O cabeçalho usa tamanho duplo, o corpo ocupa 48 colunas com altura ampliada e o
 - Complemento: imprime apenas os novos itens quando entram em produção.
 - Produtos marcados como “Produto pronto” não são impressos.
 - Contas solicitadas em `/{slug}/mesa` são impressas com itens, valores e total, sem fechar o pedido.
+- Conta para conferência e recibo de pagamento imprimem sempre em altura normal (não seguem `BODY_DOUBLE_HEIGHT`), para gastar menos papel.
 - Na primeira execução, pedidos que já estavam em produção são apenas sincronizados. Para imprimi-los, use `PRINT_EXISTING_ON_FIRST_RUN=true` antes da primeira inicialização.
 - O arquivo `.env` contém credenciais e não deve ser compartilhado ou versionado.
