@@ -210,7 +210,7 @@ function orderSelect({ includeStatusChangedAt, includeDelivery }) {
         notes: true,
         kitchenStatus: true,
         addedAt: true,
-        product: true,
+        product: { include: { category: { include: { printerStation: true } } } },
         fractionProduct: true,
         variant: true,
         flavors: { orderBy: { id: "asc" }, include: { flavor: true } },

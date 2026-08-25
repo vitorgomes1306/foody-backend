@@ -24,6 +24,7 @@ import whatsappRoutes from './routes/whatsapp.js';
 import whatsappWebhookRoutes from './routes/whatsappWebhook.js';
 import addressRoutes from './routes/address.js';
 import printJobRoutes from './routes/printJob.js';
+import printerStationRoutes from './routes/printerStation.js';
 import billingRoutes from './routes/billing.js';
 
 
@@ -61,6 +62,7 @@ app.use('/api', waiterRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', whatsappRoutes);
 app.use('/api', printJobRoutes);
+app.use('/api', printerStationRoutes);
 
 
 // configuração da porta do servidor

@@ -42,6 +42,7 @@ router.get("/tenant/:tenantId/categories", authMiddleware, async (req, res) => {
     const categories = await prisma.category.findMany({
       where: { tenantId, ...(typeof active === "boolean" ? { active } : {}) },
       orderBy: [{ name: "asc" }, { id: "asc" }],
+      include: { printerStation: true },
     })
 
     return res.status(200).json(categories)
@@ -111,6 +112,14 @@ router.put("/tenant/:tenantId/categories/:id", authMiddleware, async (req, res) 
     const data = {}
     if (typeof req.body?.name === "string") data.name = req.body.name.trim()
     if (typeof req.body?.active === "boolean") data.active = req.body.active
+    if ("printerStationId" in (req.body || {})) {
+      const printerStationId = parseIntOrNull(req.body.printerStationId)
+      if (printerStationId) {
+        const station = await prisma.printerStation.findFirst({ where: { id: printerStationId, tenantId } })
+        if (!station) return res.status(400).json({ error: "Estação de impressão inválida" })
+      }
+      data.printerStationId = printerStationId
+    }
 
     if (typeof data.name === "string" && !data.name) {
       return res.status(400).json({ error: "Nome é obrigatório" })
@@ -119,6 +128,7 @@ router.put("/tenant/:tenantId/categories/:id", authMiddleware, async (req, res) 
     const category = await prisma.category.update({
       where: { id },
       data,
+      include: { printerStation: true },
     })
 
     return res.status(200).json(category)

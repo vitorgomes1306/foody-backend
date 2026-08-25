@@ -30,6 +30,20 @@ Teste a impressora:
 npm run test:print
 ```
 
+## Múltiplas impressoras (balcão, cozinha, bar, churrasqueira...)
+
+Um único agente pode imprimir em várias impressoras conectadas ao mesmo computador, roteando por categoria do produto.
+
+1. No painel, em **Operação > Impressoras**, cadastre as estações (ex.: Cozinha, Bar, Churrasqueira) e atribua cada categoria do cardápio à estação correspondente. Categorias sem estação continuam saindo na impressora padrão.
+2. No `.env` do agente, `PRINTER_NAME` continua sendo a impressora padrão (usada para categorias sem estação, além da conta para conferência e do recibo de pagamento, que não são roteados por estação). Registre as demais impressoras em `STATION_PRINTERS`, usando a mesma chave cadastrada no painel:
+
+```text
+PRINTER_NAME=EPSON_TM20_Balcao
+STATION_PRINTERS=cozinha:TM88_Cozinha,bar:Impressora_Bar,churrasqueira:Impressora_Churrasqueira
+```
+
+Rode `npm run printers` para ver o nome exato de cada impressora instalada. Se uma comanda tiver itens de mais de uma estação, o agente imprime um ticket separado em cada impressora, cada um só com os itens daquela estação.
+
 ## Execução automática
 
 Pode ser mantido em segundo plano com PM2:
@@ -60,6 +74,7 @@ O cabeçalho usa tamanho duplo. `BODY_DOUBLE_HEIGHT` controla apenas o corpo da 
 
 - Pedido original: imprime uma vez ao entrar em produção.
 - Complemento: imprime apenas os novos itens quando entram em produção.
+- Itens de categorias com estação cadastrada saem na impressora daquela estação (`STATION_PRINTERS`); os demais saem na `PRINTER_NAME`.
 - Produtos marcados como “Produto pronto” não são impressos.
 - Contas solicitadas em `/{slug}/mesa` são impressas com itens, valores e total, sem fechar o pedido.
 - Conta para conferência e recibo de pagamento imprimem sempre em altura normal (não seguem `BODY_DOUBLE_HEIGHT`), para gastar menos papel.

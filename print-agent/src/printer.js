@@ -45,8 +45,10 @@ function escPosDocument(text, { doubleHeight = config.bodyDoubleHeight } = {}) {
 }
 
 export async function printText(text, options = {}) {
+  const printerName = options.printerName || config.printerName
+
   if (config.printMode === 'preview') {
-    console.log(`\n${'='.repeat(config.paperWidth)}\n${text}\n${'='.repeat(config.paperWidth)}\n`)
+    console.log(`\n${'='.repeat(config.paperWidth)}\n[Impressora: ${printerName || '(não definida)'}]\n${text}\n${'='.repeat(config.paperWidth)}\n`)
     return
   }
 
@@ -55,9 +57,9 @@ export async function printText(text, options = {}) {
   try {
     if (process.platform === 'win32') {
       const scriptPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'windows-raw-print.ps1')
-      await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-PrinterName', config.printerName, '-FilePath', filePath])
+      await run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-PrinterName', printerName, '-FilePath', filePath])
     } else {
-      await run('lp', ['-d', config.printerName, '-o', 'raw', filePath])
+      await run('lp', ['-d', printerName, '-o', 'raw', filePath])
     }
   } finally {
     await fs.unlink(filePath).catch(() => {})

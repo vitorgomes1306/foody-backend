@@ -36,17 +36,36 @@ async function login() {
 }
 
 const productionItems = (order) => (order.items || []).filter((item) => !item?.product?.skipKds)
+const stationKeyFor = (item) => item?.product?.category?.printerStation?.key || null
+
+function groupByStation(items) {
+  const groups = new Map()
+  for (const item of items) {
+    const key = stationKeyFor(item)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(item)
+  }
+  return [...groups.entries()]
+}
 
 function batches(orders, printed) {
   const result = []
   for (const order of orders || []) {
     if (['delivered', 'cancelled', 'returned'].includes(order.status)) continue
-    const original = productionItems(order).filter((item) => !item.addedAt)
-    const originalKey = `order:${order.id}:original`
-    if (order.status === 'preparing' && original.length && !printed.has(originalKey)) result.push({ key: originalKey, order, items: original, addition: false })
 
-    const additions = productionItems(order).filter((item) => item.addedAt && item.kitchenStatus === 'preparing' && !printed.has(`item:${item.id}`))
-    if (additions.length) result.push({ key: additions.map((item) => `item:${item.id}`), order, items: additions, addition: true })
+    const original = productionItems(order).filter((item) => !item.addedAt)
+    if (order.status === 'preparing' && original.length) {
+      for (const [station, items] of groupByStation(original)) {
+        const key = `order:${order.id}:original:${station || 'default'}`
+        if (!printed.has(key)) result.push({ key, order, items, addition: false, station })
+      }
+    }
+
+    const additions = productionItems(order).filter((item) => item.addedAt && item.kitchenStatus === 'preparing')
+    for (const [station, items] of groupByStation(additions)) {
+      const pending = items.filter((item) => !printed.has(`item:${item.id}`))
+      if (pending.length) result.push({ key: pending.map((item) => `item:${item.id}`), order, items: pending, addition: true, station })
+    }
   }
   return result
 }
@@ -63,10 +82,11 @@ async function poll(state) {
       console.log('Sincronização inicial concluída. Pedidos que já estavam em produção não foram impressos.')
     }
     for (const batch of pending) {
-      await printText(buildReceipt(batch.order, batch.items, { addition: batch.addition }))
+      const printerName = (batch.station && config.stationPrinters[batch.station]) || config.printerName
+      await printText(buildReceipt(batch.order, batch.items, { addition: batch.addition }), { printerName })
       for (const key of Array.isArray(batch.key) ? batch.key : [batch.key]) state.printed.add(key)
       await saveState(state)
-      console.log(`[${new Date().toLocaleTimeString('pt-BR')}] Pedido #${batch.order.id}${batch.addition ? ' (complemento)' : ''} impresso.`)
+      console.log(`[${new Date().toLocaleTimeString('pt-BR')}] Pedido #${batch.order.id}${batch.addition ? ' (complemento)' : ''} impresso${batch.station ? ` (${batch.station})` : ''}.`)
     }
     const jobs = await request(`/api/tenant/${encodeURIComponent(config.tenantId)}/print-jobs/pending`)
     for (const job of jobs || []) {

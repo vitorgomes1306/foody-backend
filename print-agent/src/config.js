@@ -22,6 +22,20 @@ const number = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+function parseStationPrinters(raw) {
+  const map = {}
+  for (const pair of String(raw || '').split(',')) {
+    const trimmed = pair.trim()
+    if (!trimmed) continue
+    const separator = trimmed.indexOf(':')
+    if (separator < 1) continue
+    const key = trimmed.slice(0, separator).trim().toLowerCase()
+    const printerName = trimmed.slice(separator + 1).trim()
+    if (key && printerName) map[key] = printerName
+  }
+  return map
+}
+
 export const config = {
   root,
   statePath: path.join(root, '.print-state.json'),
@@ -30,8 +44,9 @@ export const config = {
   email: String(process.env.EMAIL || '').trim(),
   password: String(process.env.PASSWORD || ''),
   printerName: String(process.env.PRINTER_NAME || '').trim(),
+  stationPrinters: parseStationPrinters(process.env.STATION_PRINTERS),
   printMode: String(process.env.PRINT_MODE || 'preview').toLowerCase(),
-  pollIntervalMs: Math.max(2000, number(process.env.POLL_INTERVAL_MS, 5000)),
+  pollIntervalMs: Math.max(2000, number(process.env.POLL_INTERVAL_MS, 2000)),
   printExistingOnFirstRun: String(process.env.PRINT_EXISTING_ON_FIRST_RUN || '').toLowerCase() === 'true',
   paperWidth: Math.min(64, Math.max(32, number(process.env.PAPER_WIDTH, 42))),
   bodyDoubleHeight: String(process.env.BODY_DOUBLE_HEIGHT ?? 'true').toLowerCase() === 'true',
