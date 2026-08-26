@@ -36,17 +36,22 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Senha incorreta' });
         }
 
-        // remove senha da resposta
-        const { password: _, billingCustomerId: _billingCustomerId, billingTrialStartedAt: _billingTrialStartedAt, ...userWithoutPassword } = user;
-
         if (!process.env.JWT_SECRET) {
             console.error('JWT_SECRET não está configurado no ambiente');
             return res.status(503).json({ error: 'Configuração de autenticação indisponível' });
         }
 
+        const liteSessionId = user.plan === 'lite' ? uuidv4() : null;
+        if (liteSessionId) {
+            await prisma.user.update({ where: { id: user.id }, data: { liteSessionId } });
+        }
+
+        // remove dados privados da resposta
+        const { password: _, billingCustomerId: _billingCustomerId, billingTrialStartedAt: _billingTrialStartedAt, liteSessionId: _liteSessionId, ...userWithoutPassword } = user;
+
         // gera token JWT
         const token = jwt.sign(
-            { userId: user.id },
+            { userId: user.id, ...(liteSessionId ? { liteSessionId } : {}) },
             process.env.JWT_SECRET,
             { expiresIn: '100d' }
         );

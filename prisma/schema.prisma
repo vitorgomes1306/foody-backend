@@ -215,6 +215,7 @@ model User {
   updatedAt             DateTime @updatedAt
   billingCustomerId     String?  @unique
   billingTrialStartedAt DateTime @default(now())
+  liteSessionId         String?
 
   tenants            Tenant[]
   orders             Order[]

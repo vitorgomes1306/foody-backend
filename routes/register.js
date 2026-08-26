@@ -38,7 +38,7 @@ router.post('/users', async (req, res) => {
       },
     });
 
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, billingCustomerId: _billingCustomerId, billingTrialStartedAt: _billingTrialStartedAt, liteSessionId: _liteSessionId, ...userWithoutPassword } = user;
     
     // Bloco de cadastro bem-sucedido
     // ✅ CADASTRO BEM-SUCEDIDO
