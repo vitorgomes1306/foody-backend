@@ -15,6 +15,7 @@ function aggregate(orders) {
   const products = new Map()
   const paymentMethods = new Map()
   const orderSources = new Map()
+  const orderTypes = new Map()
   let grossSales = 0
   let commissions = 0
   let discounts = 0
@@ -28,11 +29,15 @@ function aggregate(orders) {
     payment.orders += 1
     payment.total += number(order.total)
     paymentMethods.set(paymentType, payment)
-    const sourceType = order.waiterId ? 'waiter' : order.type === 'local' ? 'counter' : 'digital_menu'
+    const sourceType = order.waiterId ? 'waiter' : ['local', 'takeaway'].includes(order.type) ? 'counter' : 'digital_menu'
     const source = orderSources.get(sourceType) || { type: sourceType, orders: 0, total: 0 }
     source.orders += 1
     source.total += number(order.total)
     orderSources.set(sourceType, source)
+    const orderType = orderTypes.get(order.type) || { type: order.type, orders: 0, total: 0 }
+    orderType.orders += 1
+    orderType.total += number(order.total)
+    orderTypes.set(order.type, orderType)
     if (order.waiter) {
       const current = waiters.get(order.waiter.id) || { id: order.waiter.id, name: order.waiter.name, orders: 0, sales: 0, commission: 0 }
       current.orders += 1
@@ -59,6 +64,7 @@ function aggregate(orders) {
     products: [...products.values()].sort((a, b) => b.quantity - a.quantity),
     paymentMethods: [...paymentMethods.values()].sort((a, b) => b.total - a.total),
     orderSources: [...orderSources.values()].sort((a, b) => b.orders - a.orders),
+    orderTypes: [...orderTypes.values()].sort((a, b) => b.orders - a.orders),
   }
 }
 

@@ -48,6 +48,10 @@ async function activatePaidSubscription(subscriptionId, payment = {}) {
         paidAt: now,
       },
     });
+    await tx.user.update({
+      where: { id: subscription.userId },
+      data: { plan: subscription.plan, billingPlanChangeRequired: false },
+    });
   });
 }
 
@@ -132,7 +136,6 @@ router.post('/billing/checkout', authMiddleware, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
     const plan = VALID_PLANS.has(req.body?.plan) ? req.body.plan : user.plan;
-    if (plan !== user.plan) return res.status(400).json({ error: 'O plano informado não corresponde ao plano da conta' });
     const settings = await getBillingSettings();
     const amount = settings[`${plan}Price`];
     const pending = await prisma.subscription.create({ data: { userId: user.id, plan, provider: settings.activeProvider, amount } });
@@ -298,6 +301,7 @@ router.get('/billing/admin/customers', authMiddleware, requireAdmin, async (_req
       name: true,
       email: true,
       plan: true,
+      billingPlanChangeRequired: true,
       createdAt: true,
       subscriptions: {
         where: { status: 'paid' },
@@ -318,6 +322,24 @@ router.get('/billing/admin/customers', authMiddleware, requireAdmin, async (_req
     };
   }));
   return res.json(result);
+});
+
+router.patch('/billing/admin/customers/:userId/plan', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const userId = Number.parseInt(req.params.userId, 10);
+    const plan = VALID_PLANS.has(req.body?.plan) ? req.body.plan : null;
+    if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'Cliente inválido' });
+    if (!plan) return res.status(400).json({ error: 'Plano inválido' });
+    const customer = await prisma.user.findFirst({ where: { id: userId, isAdmin: false }, select: { id: true, plan: true } });
+    if (!customer) return res.status(404).json({ error: 'Cliente não encontrado' });
+    if (customer.plan === plan) return res.status(400).json({ error: 'O cliente já está neste plano' });
+    await prisma.user.update({ where: { id: userId }, data: { plan, billingPlanChangeRequired: true } });
+    await prisma.subscription.updateMany({ where: { userId, status: 'pending' }, data: { status: 'failed' } });
+    return res.json({ userId, plan, billingPlanChangeRequired: true });
+  } catch (error) {
+    console.error('Erro ao alterar plano do cliente:', error);
+    return res.status(500).json({ error: 'Não foi possível alterar o plano do cliente' });
+  }
 });
 
 export default router;

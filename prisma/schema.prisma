@@ -216,6 +216,7 @@ model User {
   billingCustomerId     String?  @unique
   billingTrialStartedAt DateTime @default(now())
   liteSessionId         String?
+  billingPlanChangeRequired Boolean @default(false)
 
   tenants            Tenant[]
   orders             Order[]
@@ -417,6 +418,7 @@ model Option {
 model Table {
   id       Int    @id @default(autoincrement())
   number   Int
+  capacity Int    @default(4)
   tenantId String @db.Uuid
 
   tenant Tenant  @relation(fields: [tenantId], references: [id])
@@ -606,6 +608,7 @@ enum Plan {
 enum OrderType {
   local // consumir no local
   delivery // entrega
+  takeaway // feito no balcão para levar
   pickup // retirada no local
 }
 

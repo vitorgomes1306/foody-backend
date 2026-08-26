@@ -54,7 +54,7 @@ function applyPromotionToCents(valueCents, baseCents, promotionalCents) {
 }
 
 function parseOrderType(value) {
-  if (value === "local" || value === "delivery" || value === "pickup") return value
+  if (value === "local" || value === "delivery" || value === "takeaway" || value === "pickup") return value
   return null
 }
 

@@ -17,7 +17,7 @@ export async function getBillingSettings() {
 
 export async function getBillingAccess(userId) {
   const [user, settings, latestPaid] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { id: true, isAdmin: true, billingTrialStartedAt: true, plan: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true, isAdmin: true, billingTrialStartedAt: true, plan: true, billingPlanChangeRequired: true } }),
     getBillingSettings(),
     prisma.subscription.findFirst({
       where: { userId, status: 'paid' },
@@ -28,9 +28,13 @@ export async function getBillingAccess(userId) {
   if (!user) return { allowed: false, reason: 'user_not_found', settings, subscription: null };
   if (user.isAdmin) return { allowed: true, reason: 'admin', settings, subscription: latestPaid };
 
+  if (user.billingPlanChangeRequired) {
+    return { allowed: false, reason: 'plan_change_required', settings, subscription: latestPaid, currentPlan: user.plan };
+  }
+
   const now = new Date();
   if (latestPaid?.endsAt && latestPaid.endsAt > now) {
-    return { allowed: true, reason: 'active', settings, subscription: latestPaid };
+    return { allowed: true, reason: 'active', settings, subscription: latestPaid, currentPlan: user.plan };
   }
   // A data de vencimento é a fonte da verdade. Assim, uma alteração manual em
   // endsAt não deixa o acesso aberto por causa de um graceEndsAt antigo.
@@ -41,12 +45,12 @@ export async function getBillingAccess(userId) {
     ? { ...latestPaid, graceEndsAt: effectiveGraceEndsAt }
     : null;
   if (effectiveGraceEndsAt && effectiveGraceEndsAt > now) {
-    return { allowed: true, reason: 'renewal_grace', settings, subscription };
+    return { allowed: true, reason: 'renewal_grace', settings, subscription, currentPlan: user.plan };
   }
 
   const trialEndsAt = addDays(user.billingTrialStartedAt, settings.initialTrialDays);
   if (!latestPaid && trialEndsAt > now) {
-    return { allowed: true, reason: 'trial', settings, subscription: null, trialEndsAt };
+    return { allowed: true, reason: 'trial', settings, subscription: null, trialEndsAt, currentPlan: user.plan };
   }
 
   return {
@@ -55,6 +59,7 @@ export async function getBillingAccess(userId) {
     settings,
     subscription,
     trialEndsAt,
+    currentPlan: user.plan,
   };
 }
 

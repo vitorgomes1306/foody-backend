@@ -75,13 +75,35 @@ router.post('/tenant/:tenantId/tables', authMiddleware, async (req, res) => {
     const { tenantId } = req.params
     if (!(await ownsTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado ao tenant' })
     const number = Number.parseInt(req.body?.number, 10)
+    const capacity = Number.parseInt(req.body?.capacity, 10)
     if (!Number.isFinite(number) || number <= 0) return res.status(400).json({ error: 'Informe um número de mesa válido' })
-    const table = await prisma.table.create({ data: { tenantId, number } })
+    if (!Number.isFinite(capacity) || capacity <= 0 || capacity > 100) return res.status(400).json({ error: 'Informe uma capacidade entre 1 e 100 pessoas' })
+    const table = await prisma.table.create({ data: { tenantId, number, capacity } })
     return res.status(201).json(table)
   } catch (error) {
     if (error?.code === 'P2002') return res.status(409).json({ error: 'Esta mesa já está cadastrada' })
     console.error(error)
     return res.status(500).json({ error: 'Erro ao cadastrar mesa' })
+  }
+})
+
+router.patch('/tenant/:tenantId/tables/:id', authMiddleware, async (req, res) => {
+  try {
+    const { tenantId } = req.params
+    const id = Number.parseInt(req.params.id, 10)
+    if (!(await ownsTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado ao tenant' })
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Mesa inválida' })
+    const number = Number.parseInt(req.body?.number, 10)
+    const capacity = Number.parseInt(req.body?.capacity, 10)
+    if (!Number.isFinite(number) || number <= 0) return res.status(400).json({ error: 'Informe um número de mesa válido' })
+    if (!Number.isFinite(capacity) || capacity <= 0 || capacity > 100) return res.status(400).json({ error: 'Informe uma capacidade entre 1 e 100 pessoas' })
+    const result = await prisma.table.updateMany({ where: { id, tenantId }, data: { number, capacity } })
+    if (!result.count) return res.status(404).json({ error: 'Mesa não encontrada' })
+    return res.json(await prisma.table.findFirst({ where: { id, tenantId } }))
+  } catch (error) {
+    if (error?.code === 'P2002') return res.status(409).json({ error: 'Esta mesa já está cadastrada' })
+    console.error(error)
+    return res.status(500).json({ error: 'Erro ao atualizar mesa' })
   }
 })
 
