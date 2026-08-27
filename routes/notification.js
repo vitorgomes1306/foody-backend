@@ -82,8 +82,12 @@ router.get('/notices/active', authMiddleware, async (req, res) => {
 })
 
 router.get('/notifications/admin/notices', authMiddleware, requireAdmin, async (_req, res) => {
-  const notices = await prisma.appNotice.findMany({ orderBy: { updatedAt: 'desc' } })
-  return res.json({ notices, firebase: firebaseMessagingStatus() })
+  const [notices, devices, activeDevices] = await Promise.all([
+    prisma.appNotice.findMany({ orderBy: { updatedAt: 'desc' } }),
+    prisma.pushDeviceToken.count(),
+    prisma.pushDeviceToken.count({ where: { active: true } }),
+  ])
+  return res.json({ notices, firebase: { ...firebaseMessagingStatus(), devices, activeDevices } })
 })
 
 router.post('/notifications/admin/notices', authMiddleware, requireAdmin, async (req, res) => {
