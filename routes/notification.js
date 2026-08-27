@@ -66,17 +66,18 @@ router.delete('/notifications/device-token', authMiddleware, async (req, res) =>
 router.get('/notices/active', authMiddleware, async (req, res) => {
   if (req.authRole === 'waiter') return res.json([])
   const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { plan: true, isAdmin: true } })
-  if (!user || user.isAdmin) return res.json([])
+  if (!user) return res.json([])
   const now = new Date()
   const rows = await prisma.appNotice.findMany({
     where: {
       show: true,
-      audience: { in: ['all', user.plan] },
+      ...(user.isAdmin ? {} : { audience: { in: ['all', user.plan] } }),
       AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
     },
     orderBy: { updatedAt: 'desc' },
     take: 10,
   })
+  res.set('Cache-Control', 'no-store')
   return res.json(rows)
 })
 
