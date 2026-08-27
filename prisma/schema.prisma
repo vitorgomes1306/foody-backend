@@ -285,6 +285,7 @@ model AppNotice {
   id            String    @id @default(uuid()) @db.Uuid
   title         String
   message       String
+  imageUrl      String?
   show          Boolean   @default(false)
   audience      String    @default("all")
   startsAt      DateTime?

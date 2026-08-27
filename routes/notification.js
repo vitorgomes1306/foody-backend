@@ -30,6 +30,11 @@ function noticeData(body, { partial = false } = {}) {
     data.audience = body.audience
   }
   if (Object.prototype.hasOwnProperty.call(body, 'show')) data.show = body.show === true
+  if (!partial || Object.prototype.hasOwnProperty.call(body, 'imageUrl')) {
+    const imageUrl = typeof body?.imageUrl === 'string' ? body.imageUrl.trim() : ''
+    if (imageUrl.length > 2048) throw new Error('A URL da imagem é muito longa')
+    data.imageUrl = imageUrl || null
+  }
   for (const field of ['startsAt', 'endsAt']) {
     if (!partial || Object.prototype.hasOwnProperty.call(body, field)) {
       if (!body?.[field]) data[field] = null
@@ -131,11 +136,13 @@ router.post('/notifications/admin/notices/:id/send', authMiddleware, requireAdmi
   for (let index = 0; index < devices.length; index += 500) {
     const tokens = devices.slice(index, index + 500).map((device) => device.token)
     if (!tokens.length) continue
+    const publicBaseUrl = String(process.env.API_PUBLIC_URL || process.env.APP_URL || '').replace(/\/$/, '')
+    const notificationImageUrl = notice.imageUrl ? (notice.imageUrl.startsWith('/') ? `${publicBaseUrl}${notice.imageUrl}` : notice.imageUrl) : undefined
     const response = await messaging.sendEachForMulticast({
       tokens,
       notification: { title: notice.title, body: notice.message },
       data: { noticeId: notice.id, route: '/dash' },
-      android: { priority: 'high', notification: { channelId: 'chefito_avisos', sound: 'default' } },
+      android: { priority: 'high', notification: { channelId: 'chefito_avisos', sound: 'default', icon: 'ic_launcher', ...(notificationImageUrl ? { imageUrl: notificationImageUrl } : {}) } },
       apns: { payload: { aps: { sound: 'default' } } },
     })
     successCount += response.successCount
