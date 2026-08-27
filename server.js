@@ -26,6 +26,7 @@ import addressRoutes from './routes/address.js';
 import printJobRoutes from './routes/printJob.js';
 import printerStationRoutes from './routes/printerStation.js';
 import billingRoutes from './routes/billing.js';
+import notificationRoutes from './routes/notification.js';
 
 
 
@@ -51,6 +52,7 @@ app.use('/api', addressRoutes);
 app.use('/api', registerRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', billingRoutes);
+app.use('/api', notificationRoutes);
 app.use('/api', tenantRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', productRoutes);

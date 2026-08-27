@@ -222,6 +222,7 @@ model User {
   orders             Order[]
   mediaLibraryImages MediaLibraryImage[]
   subscriptions      Subscription[]
+  pushDeviceTokens   PushDeviceToken[]
 
   // Usuario administrador do sistema (não relacionado a nenhum tenant)
   isAdmin Boolean @default(false)
@@ -263,6 +264,37 @@ model Subscription {
 
   @@index([userId, status, endsAt])
   @@index([provider, providerCheckoutId])
+}
+
+model PushDeviceToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     Int
+  token      String   @unique
+  platform   String   @default("android")
+  active     Boolean  @default(true)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, active])
+}
+
+model AppNotice {
+  id            String    @id @default(uuid()) @db.Uuid
+  title         String
+  message       String
+  show          Boolean   @default(false)
+  audience      String    @default("all")
+  startsAt      DateTime?
+  endsAt        DateTime?
+  lastPushAt    DateTime?
+  lastPushCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([show, startsAt, endsAt])
 }
 
 // ─────────────────────────────────────────

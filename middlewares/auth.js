@@ -41,7 +41,7 @@ export async function authMiddleware(req, res, next) {
       }
     }
 
-    const billingExempt = req.path === '/profile' || req.path.startsWith('/billing');
+    const billingExempt = req.path === '/profile' || req.path.startsWith('/billing') || req.path.startsWith('/notices') || req.path.startsWith('/notifications');
     if (req.authRole !== 'waiter' && !billingExempt) {
       const access = await getBillingAccess(req.userId);
       if (!access.allowed) {
