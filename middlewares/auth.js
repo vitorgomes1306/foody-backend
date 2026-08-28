@@ -27,7 +27,12 @@ export async function authMiddleware(req, res, next) {
     req.waiterId = decoded.waiterId;
     req.authRole = decoded.role || 'user';
 
-    if (req.authRole !== 'waiter') {
+    if (req.authRole === 'waiter') {
+      const waiterTenant = await prisma.tenant.findUnique({ where: { id: req.tenantId }, select: { settings: true } });
+      if (!waiterTenant || waiterTenant.settings?.waiterAppEnabled === false) {
+        return res.status(403).json({ error: 'O aplicativo do garçom não está habilitado para esta empresa', code: 'WAITER_APP_DISABLED' });
+      }
+    } else {
       const sessionUser = await prisma.user.findUnique({
         where: { id: req.userId },
         select: { plan: true, liteSessionId: true },

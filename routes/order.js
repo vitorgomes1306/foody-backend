@@ -510,6 +510,10 @@ router.post("/public/tenant/:slug/orders", async (req, res) => {
     const { slug } = req.params
     const tenantId = await resolveTenantIdFromSlug(slug)
     if (!tenantId) return res.status(404).json({ error: "Tenant não encontrado" })
+    const publicTenant = await prisma.tenant.findFirst({ where: { id: tenantId }, select: { settings: true } }).catch(() => null)
+    if (publicTenant?.settings?.digitalMenuEnabled === false) {
+      return res.status(403).json({ error: "Esta loja não tem o cardápio digital habilitado." })
+    }
     if (!['delivery', 'pickup'].includes(req.body?.type)) return res.status(400).json({ error: "Escolha Delivery ou Retirada" })
     if (!['cash', 'pix', 'debit_card', 'credit_card'].includes(req.body?.paymentMethodType)) return res.status(400).json({ error: "Escolha uma forma de pagamento válida" })
     if (!req.body?.customerSessionId) return res.status(400).json({ error: "Sessão do cliente não informada" })
@@ -935,6 +939,8 @@ router.patch("/tenant/:tenantId/orders/:id", authMiddleware, async (req, res) =>
       }
     }
     if (typeof req.body?.deliveryManId !== "undefined") {
+      const tenantFeatures = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } })
+      if (tenantFeatures?.settings?.deliveryDriversEnabled === false) return res.status(403).json({ error: "A gestão de entregadores não está habilitada para esta empresa" })
       const deliveryManId = parseIntOrNull(req.body.deliveryManId)
       if (!deliveryManId) return res.status(400).json({ error: "deliveryManId inválido" })
       const driver = await prisma.deliveryMen.findFirst({ where: { id: deliveryManId, tenantId }, select: { id: true } })

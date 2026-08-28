@@ -59,6 +59,9 @@ function parsePriceToDecimalString(value) {
 
 function defaultTenantSettings() {
   return {
+    digitalMenuEnabled: true,
+    waiterAppEnabled: true,
+    deliveryDriversEnabled: true,
     acceptOrdersAutomatically: false,
     maxOrderMinutes: 30,
     prepTimes: {
@@ -116,6 +119,20 @@ function isMissingTenantColumn(err, columnName) {
   if (code === 'P2022' && (metaColumn === `Tenant.${needle}` || metaColumn.includes(needle) || msg.includes(needle))) return true;
   if (msg.includes(needle) && msg.toLowerCase().includes('does not exist')) return true;
   return false;
+}
+
+async function requireAdminUser(req, res) {
+  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { isAdmin: true } });
+  if (!user?.isAdmin) {
+    res.status(403).json({ error: 'Acesso exclusivo para administradores' });
+    return false;
+  }
+  return true;
+}
+
+async function tenantFeatureEnabled(tenantId, feature) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
+  return tenant?.settings?.[feature] !== false;
 }
 
 function tenantSelect({ includeDeliveryFee, includeSettings, includePublicRelations }) {
@@ -254,6 +271,7 @@ router.get('/public/tenant/:slug', async (req, res) => {
           logoUrl: true,
           phone: true,
           deliveryFee: true,
+          settings: true,
           zipCode: true,
           street: true,
           number: true,
@@ -288,6 +306,17 @@ router.get('/public/tenant/:slug', async (req, res) => {
     }
 
     const tenantId = baseTenant.id;
+    const digitalMenuEnabled = baseTenant.settings?.digitalMenuEnabled !== false;
+
+    if (!digitalMenuEnabled) {
+      return res.status(200).json({
+        id: baseTenant.id,
+        name: baseTenant.name,
+        slug: baseTenant.slug,
+        logoUrl: baseTenant.logoUrl,
+        digitalMenuEnabled: false,
+      });
+    }
 
     const [media, openingHours, paymentMethods, categories, bestSellerRows] = await Promise.all([
       prisma.tenantMedia.findMany({ where: { tenantId }, orderBy: [{ id: 'asc' }] }).catch(() => []),
@@ -357,6 +386,8 @@ router.get('/public/tenant/:slug', async (req, res) => {
 
     return res.status(200).json({
       ...baseTenant,
+      settings: undefined,
+      digitalMenuEnabled: true,
       deliveryFee: typeof baseTenant.deliveryFee === 'undefined' ? '0.00' : baseTenant.deliveryFee,
       media,
       openingHours,
@@ -519,6 +550,7 @@ router.get('/tenant/:id/delivery-men', authMiddleware, async (req, res) => {
     const tenantId = req.params.id;
     const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
     if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+    if (!(await tenantFeatureEnabled(tenantId, 'deliveryDriversEnabled'))) return res.status(403).json({ error: 'A gestão de entregadores não está habilitada para esta empresa' });
 
     const list = await prisma.deliveryMen.findMany({
       where: { tenantId },
@@ -537,6 +569,7 @@ router.post('/tenant/:id/delivery-men', authMiddleware, upload.single('avatar'),
     const tenantId = req.params.id;
     const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
     if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+    if (!(await tenantFeatureEnabled(tenantId, 'deliveryDriversEnabled'))) return res.status(403).json({ error: 'A gestão de entregadores não está habilitada para esta empresa' });
 
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
@@ -601,6 +634,7 @@ router.put('/tenant/:tenantId/delivery-men/:id', authMiddleware, upload.single('
 
     const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
     if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+    if (!(await tenantFeatureEnabled(tenantId, 'deliveryDriversEnabled'))) return res.status(403).json({ error: 'A gestão de entregadores não está habilitada para esta empresa' });
 
     const existing = await prisma.deliveryMen.findFirst({ where: { id, tenantId } });
     if (!existing) return res.status(404).json({ error: 'Entregador não encontrado' });
@@ -655,6 +689,7 @@ router.delete('/tenant/:tenantId/delivery-men/:id', authMiddleware, async (req, 
 
     const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
     if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+    if (!(await tenantFeatureEnabled(tenantId, 'deliveryDriversEnabled'))) return res.status(403).json({ error: 'A gestão de entregadores não está habilitada para esta empresa' });
 
     const existing = await prisma.deliveryMen.findFirst({ where: { id, tenantId }, select: { id: true } });
     if (!existing) return res.status(404).json({ error: 'Entregador não encontrado' });
@@ -675,6 +710,7 @@ router.get('/tenant/:tenantId/delivery-men/:id/stats', authMiddleware, async (re
 
     const allowed = await assertTenantOwner({ tenantId, userId: req.userId });
     if (!allowed) return res.status(403).json({ error: 'Acesso negado ao tenant' });
+    if (!(await tenantFeatureEnabled(tenantId, 'deliveryDriversEnabled'))) return res.status(403).json({ error: 'A gestão de entregadores não está habilitada para esta empresa' });
 
     const existing = await prisma.deliveryMen.findFirst({ where: { id, tenantId }, select: { id: true, name: true } });
     if (!existing) return res.status(404).json({ error: 'Entregador não encontrado' });
@@ -758,6 +794,58 @@ router.get('/tenant/:tenantId/delivery-men/:id/stats', authMiddleware, async (re
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/admin/tenants', authMiddleware, async (req, res) => {
+  try {
+    if (!(await requireAdminUser(req, res))) return;
+    const tenants = await prisma.tenant.findMany({
+      orderBy: [{ createdAt: 'desc' }],
+      include: {
+        owner: { select: { id: true, name: true, email: true, plan: true, active: true, createdAt: true } },
+        openingHours: { orderBy: { weekday: 'asc' } },
+        paymentMethods: { orderBy: { type: 'asc' } },
+        media: { orderBy: { id: 'asc' } },
+        _count: { select: { products: true, orders: true, tables: true, waiters: true, deliveryMen: true } },
+      },
+    });
+    return res.json(tenants.map((tenant) => ({
+      ...tenant,
+      deliveryFee: String(tenant.deliveryFee ?? '0.00'),
+      permissions: {
+        digitalMenuEnabled: tenant.settings?.digitalMenuEnabled !== false,
+        waiterAppEnabled: tenant.settings?.waiterAppEnabled !== false,
+        deliveryDriversEnabled: tenant.settings?.deliveryDriversEnabled !== false,
+      },
+    })));
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro ao listar empresas' });
+  }
+});
+
+router.patch('/admin/tenants/:id/permissions', authMiddleware, async (req, res) => {
+  try {
+    if (!(await requireAdminUser(req, res))) return;
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id }, select: { id: true, settings: true } });
+    if (!tenant) return res.status(404).json({ error: 'Empresa não encontrada' });
+    const permissionKeys = ['digitalMenuEnabled', 'waiterAppEnabled', 'deliveryDriversEnabled'];
+    const permissions = {};
+    for (const key of permissionKeys) {
+      if (typeof req.body?.[key] !== 'boolean') return res.status(400).json({ error: `Permissão inválida: ${key}` });
+      permissions[key] = req.body[key];
+    }
+    const currentSettings = tenant.settings && typeof tenant.settings === 'object' && !Array.isArray(tenant.settings) ? tenant.settings : {};
+    const updated = await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { settings: { ...currentSettings, ...permissions } },
+      select: { id: true, settings: true, updatedAt: true },
+    });
+    return res.json({ ...updated, permissions });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro ao atualizar permissões da empresa' });
   }
 });
 

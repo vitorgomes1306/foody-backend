@@ -13,12 +13,13 @@ router.post('/public/tenant/:slug/waiter/login', async (req, res) => {
     const username = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : ''
     const password = typeof req.body?.password === 'string' ? req.body.password : ''
     if (!username || !password) return res.status(400).json({ error: 'Usuário e senha são obrigatórios' })
-    const tenant = await prisma.tenant.findFirst({ where: { slug: req.params.slug.trim().toLowerCase(), active: true }, select: { id: true, name: true, slug: true, logoUrl: true } })
+    const tenant = await prisma.tenant.findFirst({ where: { slug: req.params.slug.trim().toLowerCase(), active: true }, select: { id: true, name: true, slug: true, logoUrl: true, settings: true } })
     if (!tenant) return res.status(404).json({ error: 'Empresa não encontrada' })
+    if (tenant.settings?.waiterAppEnabled === false) return res.status(403).json({ error: 'O aplicativo do garçom não está habilitado para esta empresa' })
     const waiter = await prisma.waiter.findUnique({ where: { tenantId_username: { tenantId: tenant.id, username } } })
     if (!waiter || !waiter.active || !(await bcrypt.compare(password, waiter.password))) return res.status(401).json({ error: 'Usuário ou senha inválidos' })
     const token = jwt.sign({ waiterId: waiter.id, tenantId: tenant.id, role: 'waiter' }, process.env.JWT_SECRET, { expiresIn: '100d' })
-    return res.json({ token, tenant, waiter: { id: waiter.id, name: waiter.name, username: waiter.username } })
+    return res.json({ token, tenant: { ...tenant, settings: undefined }, waiter: { id: waiter.id, name: waiter.name, username: waiter.username } })
   } catch (error) {
     console.error(error)
     return res.status(500).json({ error: 'Erro ao entrar como garçom' })
@@ -44,6 +45,11 @@ router.post('/public/tenant/:slug/waiter/session', authMiddleware, async (req, r
 
 async function ownsTenant(tenantId, userId) {
   return Boolean(await prisma.tenant.findFirst({ where: { id: tenantId, ownerId: userId }, select: { id: true } }))
+}
+
+async function waiterAppEnabled(tenantId) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } })
+  return tenant?.settings?.waiterAppEnabled !== false
 }
 
 router.get('/tenant/:tenantId/tables', authMiddleware, async (req, res) => {
@@ -127,6 +133,7 @@ router.get('/tenant/:tenantId/waiters', authMiddleware, async (req, res) => {
   try {
     const { tenantId } = req.params
     if (!(await ownsTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado ao tenant' })
+    if (!(await waiterAppEnabled(tenantId))) return res.status(403).json({ error: 'O aplicativo do garçom não está habilitado para esta empresa' })
     const active = req.query.active === 'true' ? true : req.query.active === 'false' ? false : undefined
     const waiters = await prisma.waiter.findMany({ where: { tenantId, ...(typeof active === 'boolean' ? { active } : {}) }, orderBy: [{ active: 'desc' }, { name: 'asc' }], select: waiterSelect })
     return res.json(waiters)
@@ -140,6 +147,7 @@ router.post('/tenant/:tenantId/waiters', authMiddleware, async (req, res) => {
   try {
     const { tenantId } = req.params
     if (!(await ownsTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado ao tenant' })
+    if (!(await waiterAppEnabled(tenantId))) return res.status(403).json({ error: 'O aplicativo do garçom não está habilitado para esta empresa' })
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : ''
     if (!name) return res.status(400).json({ error: 'Nome é obrigatório' })
     const username = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : ''
@@ -159,6 +167,7 @@ router.put('/tenant/:tenantId/waiters/:id', authMiddleware, async (req, res) => 
     const id = Number.parseInt(req.params.id, 10)
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' })
     if (!(await ownsTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado ao tenant' })
+    if (!(await waiterAppEnabled(tenantId))) return res.status(403).json({ error: 'O aplicativo do garçom não está habilitado para esta empresa' })
     const existing = await prisma.waiter.findFirst({ where: { id, tenantId } })
     if (!existing) return res.status(404).json({ error: 'Garçom não encontrado' })
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : existing.name
@@ -179,6 +188,7 @@ router.delete('/tenant/:tenantId/waiters/:id', authMiddleware, async (req, res) 
     const id = Number.parseInt(req.params.id, 10)
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' })
     if (!(await ownsTenant(tenantId, req.userId))) return res.status(403).json({ error: 'Acesso negado ao tenant' })
+    if (!(await waiterAppEnabled(tenantId))) return res.status(403).json({ error: 'O aplicativo do garçom não está habilitado para esta empresa' })
     const result = await prisma.waiter.updateMany({ where: { id, tenantId }, data: { active: false } })
     if (!result.count) return res.status(404).json({ error: 'Garçom não encontrado' })
     return res.status(204).send()
