@@ -40,6 +40,12 @@ model Tenant {
   geoLocation            String?
   fiscalEnabled          Boolean  @default(false)
   fiscalIssuerExternalId String?
+  fiscalLegalName        String?
+  fiscalFederalTaxNumber String?
+  fiscalStateTaxNumber   String?
+  fiscalTaxRegime        String?
+  fiscalCityCode         String?
+  fiscalCertificateExpiresAt DateTime?
 
   // Relacionamentos
   owner                      User                        @relation(fields: [ownerId], references: [id])

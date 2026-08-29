@@ -2,9 +2,11 @@ import express from 'express'
 import { PrismaClient } from '@prisma/client'
 import authMiddleware from '../middlewares/auth.js'
 import { fiscalApiRequest } from '../utils/fiscalApi.js'
+import multer from 'multer'
 
 const prisma = new PrismaClient()
 const router = express.Router()
+const certificateUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } })
 
 const PAYMENT_METHODS = {
   cash: 'money',
@@ -39,7 +41,85 @@ function fiscalProductErrors(product) {
 router.get('/tenant/:tenantId/fiscal/config', authMiddleware, async (req, res) => {
   const tenant = await ownedTenant(req.params.tenantId, req.userId)
   if (!tenant) return res.status(403).json({ error: 'Acesso negado ao tenant' })
-  res.json({ enabled: tenant.fiscalEnabled, issuerExternalId: tenant.fiscalIssuerExternalId })
+  res.json({
+    enabled: tenant.fiscalEnabled,
+    issuerExternalId: tenant.fiscalIssuerExternalId,
+    legalName: tenant.fiscalLegalName,
+    federalTaxNumber: tenant.fiscalFederalTaxNumber,
+    stateTaxNumber: tenant.fiscalStateTaxNumber,
+    taxRegime: tenant.fiscalTaxRegime,
+    cityCode: tenant.fiscalCityCode,
+    certificateExpiresAt: tenant.fiscalCertificateExpiresAt,
+    company: { name: tenant.name, email: tenant.email, phone: tenant.phone, zipCode: tenant.zipCode, street: tenant.street, number: tenant.number, complement: tenant.complement, district: tenant.district, city: tenant.city, state: tenant.state },
+  })
+})
+
+router.post('/tenant/:tenantId/fiscal/onboard', authMiddleware, certificateUpload.single('certificate'), async (req, res) => {
+  const tenant = await ownedTenant(req.params.tenantId, req.userId)
+  if (!tenant) return res.status(403).json({ error: 'Acesso negado ao tenant' })
+  if (!req.file || !/\.pfx$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Envie um certificado A1 no formato .pfx' })
+
+  const value = (key) => String(req.body?.[key] || '').trim()
+  const federalTaxNumber = digits(value('federalTaxNumber'))
+  const stateTaxNumber = value('stateTaxNumber')
+  const legalName = value('legalName')
+  const taxRegime = value('taxRegime')
+  const cityCode = digits(value('cityCode'))
+  const certificatePassword = value('certificatePassword')
+  const csc = value('csc')
+  const tokenId = value('tokenId')
+  const series = value('series') || '1'
+  const nextNumber = Number.parseInt(value('nextNumber'), 10)
+  if (federalTaxNumber.length !== 14 || !stateTaxNumber || !legalName) return res.status(400).json({ error: 'Preencha CNPJ, inscrição estadual e razão social' })
+  if (!['simplesNacional', 'presumedProfit', 'actualProfit'].includes(taxRegime)) return res.status(400).json({ error: 'Regime tributário inválido' })
+  if (cityCode.length !== 7) return res.status(400).json({ error: 'Informe o código IBGE do município com 7 dígitos' })
+  if (!certificatePassword || !csc || !tokenId || !Number.isInteger(nextNumber) || nextNumber < 1) return res.status(400).json({ error: 'Preencha certificado, senha, CSC, tokenId e próximo número' })
+  if (!tenant.street || !tenant.district || !tenant.zipCode || !tenant.number || !tenant.city) return res.status(409).json({ error: 'Complete o endereço da empresa antes da configuração fiscal' })
+
+  try {
+    const result = await fiscalApiRequest('/v1/issuers/onboard', {
+      method: 'POST',
+      body: {
+        externalId: tenant.id,
+        company: {
+          name: tenant.name,
+          legalName,
+          federalTaxNumber,
+          stateTaxNumber,
+          ...(tenant.email ? { email: tenant.email } : {}),
+          ...(tenant.phone ? { phone: tenant.phone } : {}),
+          address: {
+            street: tenant.street,
+            district: tenant.district,
+            postalCode: digits(tenant.zipCode),
+            number: tenant.number,
+            ...(tenant.complement ? { additionalInformation: tenant.complement } : {}),
+            city: { code: cityCode, name: tenant.city },
+            cityName: tenant.city,
+          },
+        },
+        taxRegime,
+        certificate: { filename: req.file.originalname, base64: req.file.buffer.toString('base64'), password: certificatePassword },
+        consumerInvoice: { series, nextNumber, tokenId, csc, allowOfflineContingency: req.body?.allowOfflineContingency !== 'false' },
+      },
+    })
+    const updated = await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        fiscalEnabled: true,
+        fiscalIssuerExternalId: tenant.id,
+        fiscalLegalName: legalName,
+        fiscalFederalTaxNumber: federalTaxNumber,
+        fiscalStateTaxNumber: stateTaxNumber,
+        fiscalTaxRegime: taxRegime,
+        fiscalCityCode: cityCode,
+        fiscalCertificateExpiresAt: result?.certificate?.expirationAt ? new Date(result.certificate.expirationAt) : null,
+      },
+    })
+    res.json({ configured: true, enabled: updated.fiscalEnabled, issuerExternalId: updated.fiscalIssuerExternalId, certificateExpiresAt: updated.fiscalCertificateExpiresAt })
+  } catch (error) {
+    res.status(error.status && error.status < 500 ? error.status : 502).json({ error: error.message, code: error.code, details: error.details })
+  }
 })
 
 router.put('/tenant/:tenantId/fiscal/config', authMiddleware, async (req, res) => {
