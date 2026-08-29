@@ -12,32 +12,34 @@ datasource db {
 // TENANT (Food Truck)
 // ─────────────────────────────────────────
 model Tenant {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String   @unique
-  logoUrl     String?
-  phone       String?
-  deliveryFee Decimal  @default(0) @db.Decimal(10, 2)
-  settings    Json?
-  ownerId     Int
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  zipCode     String?
-  street      String?
-  number      String?
-  complement  String?
-  district    String?
-  city        String?
-  state       String?
-  country     String?
-  email       String?
-  website     String?
-  instagram   String?
-  facebook    String?
-  twitter     String?
-  youtube     String?
-  geoLocation String?
+  id                     String   @id @default(uuid()) @db.Uuid
+  name                   String
+  slug                   String   @unique
+  logoUrl                String?
+  phone                  String?
+  deliveryFee            Decimal  @default(0) @db.Decimal(10, 2)
+  settings               Json?
+  ownerId                Int
+  active                 Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  zipCode                String?
+  street                 String?
+  number                 String?
+  complement             String?
+  district               String?
+  city                   String?
+  state                  String?
+  country                String?
+  email                  String?
+  website                String?
+  instagram              String?
+  facebook               String?
+  twitter                String?
+  youtube                String?
+  geoLocation            String?
+  fiscalEnabled          Boolean  @default(false)
+  fiscalIssuerExternalId String?
 
   // Relacionamentos
   owner                      User                        @relation(fields: [ownerId], references: [id])
@@ -204,19 +206,19 @@ model MediaLibraryImage {
 // USUÁRIO
 // ─────────────────────────────────────────
 model User {
-  id                    Int      @id @default(autoincrement())
-  name                  String
-  email                 String   @unique
-  password              String
-  role                  Role     @default(user)
-  plan                  Plan     @default(master)
-  active                Boolean  @default(false)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  billingCustomerId     String?  @unique
-  billingTrialStartedAt DateTime @default(now())
-  liteSessionId         String?
-  billingPlanChangeRequired Boolean @default(false)
+  id                        Int      @id @default(autoincrement())
+  name                      String
+  email                     String   @unique
+  password                  String
+  role                      Role     @default(user)
+  plan                      Plan     @default(master)
+  active                    Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  billingCustomerId         String?  @unique
+  billingTrialStartedAt     DateTime @default(now())
+  liteSessionId             String?
+  billingPlanChangeRequired Boolean  @default(false)
 
   tenants            Tenant[]
   orders             Order[]
@@ -354,6 +356,14 @@ model Product {
   categoryId     Int
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  fiscalEnabled  Boolean  @default(false)
+  ncm            String?
+  cfop           Int?
+  fiscalUnit     String?  @default("UN")
+  taxOrigin      Int?     @default(0)
+  icmsCsosn      Int?
+  pisCst         Int?
+  cofinsCst      Int?
 
   tenant             Tenant           @relation(fields: [tenantId], references: [id])
   category           Category         @relation(fields: [categoryId], references: [id])
@@ -493,6 +503,10 @@ model Order {
   dailyNumber                   Int?
   createdAt                     DateTime           @default(now())
   updatedAt                     DateTime           @updatedAt
+  fiscalDocumentId              String?            @unique
+  fiscalStatus                  String?
+  fiscalError                   String?
+  fiscalIssuedAt                DateTime?
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
   user        User?        @relation(fields: [userId], references: [id])

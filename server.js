@@ -27,6 +27,7 @@ import printJobRoutes from './routes/printJob.js';
 import printerStationRoutes from './routes/printerStation.js';
 import billingRoutes from './routes/billing.js';
 import notificationRoutes from './routes/notification.js';
+import fiscalRoutes from './routes/fiscal.js';
 
 
 
@@ -65,6 +66,7 @@ app.use('/api', reportRoutes);
 app.use('/api', whatsappRoutes);
 app.use('/api', printJobRoutes);
 app.use('/api', printerStationRoutes);
+app.use('/api', fiscalRoutes);
 
 
 // configuração da porta do servidor
