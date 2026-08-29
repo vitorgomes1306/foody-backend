@@ -25,6 +25,14 @@ function digits(value) {
   return String(value || '').replace(/\D/g, '')
 }
 
+function validGtin(value) {
+  const code = digits(value)
+  if (![8, 12, 13, 14].includes(code.length)) return null
+  const body = code.slice(0, -1)
+  const sum = [...body].reverse().reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 3 : 1), 0)
+  return (10 - (sum % 10)) % 10 === Number(code.at(-1)) ? code : null
+}
+
 function fiscalProductErrors(product) {
   const missing = []
   if (!product.fiscalEnabled) missing.push('habilitação fiscal')
@@ -147,7 +155,13 @@ router.put('/tenant/:tenantId/fiscal/products/:productId', authMiddleware, async
   const fiscalUnit = String(req.body?.fiscalUnit || 'UN').trim().toUpperCase()
   const numbers = Object.fromEntries(['cfop', 'taxOrigin', 'icmsCsosn', 'pisCst', 'cofinsCst'].map((key) => [key, Number(req.body?.[key])]))
   if (req.body?.fiscalEnabled === true && ncm.length !== 8) return res.status(400).json({ error: 'NCM deve conter 8 dígitos' })
-  if (req.body?.fiscalEnabled === true && Object.values(numbers).some((value) => !Number.isInteger(value))) return res.status(400).json({ error: 'Preencha todos os códigos tributários do produto' })
+  if (req.body?.fiscalEnabled === true && (
+    !Number.isInteger(numbers.cfop) || numbers.cfop < 1000 || numbers.cfop > 9999
+    || !Number.isInteger(numbers.taxOrigin) || numbers.taxOrigin < 0 || numbers.taxOrigin > 8
+    || !Number.isInteger(numbers.icmsCsosn) || numbers.icmsCsosn < 100
+    || !Number.isInteger(numbers.pisCst) || numbers.pisCst < 0
+    || !Number.isInteger(numbers.cofinsCst) || numbers.cofinsCst < 0
+  )) return res.status(400).json({ error: 'Preencha códigos fiscais válidos para CFOP, origem, CSOSN, PIS e COFINS' })
 
   const updated = await prisma.product.update({
     where: { id: product.id },
@@ -196,9 +210,10 @@ router.post('/tenant/:tenantId/orders/:orderId/fiscal-invoice', authMiddleware, 
     items: order.items.map((item) => {
       const unitAmount = Number(item.unitPrice)
       const quantity = Number(item.quantity)
+      const gtinCode = validGtin(item.product.barcode)
       return {
         code: String(item.product.seq || item.product.id),
-        ...(digits(item.product.barcode) ? { gtinCode: digits(item.product.barcode) } : {}),
+        ...(gtinCode ? { gtinCode } : {}),
         description: item.product.name,
         ncm: digits(item.product.ncm),
         cfop: item.product.cfop,
